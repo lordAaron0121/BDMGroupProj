@@ -2,34 +2,47 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Predicate;
+import java.nio.file.Paths;
 
 public class ResalePriceAnalyzer {
     public static void main(String[] args) throws IOException {
-        ColumnStore store = CSVLoader.loadCSV("C:/Users/User/Downloads/Telegram Desktop/ResalePricesSingapore.csv");
+        String relativePath = "data/ResalePricesSingapore.csv";
+        ColumnStore store = CSVLoader.loadCSV(relativePath);
 
-        // Filter data for JURONG WEST in March 2021 with floor area >= 80 sq m
-        List<Integer> filteredIndices = new ArrayList<>();
-        List<Object> prices = store.getColumn("resale_price");
+        // Progressive filtering approach
+        // 1. First filter by month (March and April 2021)
+        List<Integer> monthFilteredIndices = new ArrayList<>();
         List<Object> months = store.getColumn("month");
-        List<Object> towns = store.getColumn("town");
-        List<Object> floorAreas = store.getColumn("floor_area_sqm");
-
-        for (int i = 0; i < prices.size(); i++) {
-            try {
-                if (months.get(i).equals("2021-01") &&
-                        towns.get(i).equals("JURONG WEST") &&
-                        Double.parseDouble((String) floorAreas.get(i)) >= 80) {
-                    filteredIndices.add(i);
-                }
-            } catch (NumberFormatException e) {
-                // Handle the exception (e.g., log it or skip this entry)
-                System.err.println("Error parsing floor area: " + floorAreas.get(i) + " at index " + i);
+        
+        // First pass: Filter by month
+        for (int i = 0; i < months.size(); i++) {
+            String month = (String) months.get(i);
+            if (month.equals("2021-03") || month.equals("2021-04")) {
+                monthFilteredIndices.add(i);
             }
         }
 
+        // 2. Then filter by town and floor area
+        List<Integer> finalFilteredIndices = new ArrayList<>();
+        List<Object> towns = store.getColumn("town");
+        List<Object> floorAreas = store.getColumn("floor_area_sqm");
+
+        for (int index : monthFilteredIndices) {
+            try {
+                if (towns.get(index).equals("JURONG WEST") &&
+                    Double.parseDouble((String) floorAreas.get(index)) >= 80) {
+                    finalFilteredIndices.add(index);
+                }
+            } catch (NumberFormatException e) {
+                System.err.println("Error parsing floor area: " + floorAreas.get(index) + " at index " + index);
+            }
+        }
+
+        // Extract filtered data
+        List<Object> prices = store.getColumn("resale_price");
         List<Object> filteredPrices = new ArrayList<>();
         List<Object> filteredAreas = new ArrayList<>();
-        for (int index : filteredIndices) {
+        for (int index : finalFilteredIndices) {
             filteredPrices.add(prices.get(index));
             filteredAreas.add(floorAreas.get(index));
         }
