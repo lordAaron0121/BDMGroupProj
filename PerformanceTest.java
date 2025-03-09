@@ -93,27 +93,43 @@ public class PerformanceTest {
         
         // Get all columns at once to avoid multiple lookups
         List<Object> months = store.getColumn("month");
-        List<Object> towns = store.getColumn("town");
-        List<Object> areas = store.getColumn("floor_area_sqm");
-        List<Object> prices = store.getColumn("resale_price");
         
-        // Single pass with early termination conditions
+        // Only collect months that pass the month condition
+        List<Integer> validMonths = new ArrayList<>();
         for (int i = 0; i < months.size(); i++) {
-            String month = (String) months.get(i);
-            // Check month first as it's likely to filter out most records
-            if (month.equals("2021-03") || month.equals("2021-04")) {
-                // Only check town if month matches
-                if (towns.get(i).equals("JURONG WEST")) {
-                    // Only parse area if both month and town match
-                    double area = Double.parseDouble((String) areas.get(i));
-                    if (area >= 80) {
-                        matches[0]++;
-                        filteredPrices.add(prices.get(i));
-                        filteredAreas.add(areas.get(i));
-                    }
-                }
+            if (months.get(i).equals("2021-03") || months.get(i).equals("2021-04")) {
+                validMonths.add(i);
             }
         }
+
+        List<Object> towns = store.getColumn("town");
+
+        // Only collect towns that correspond to the valid months
+        List<Integer> validTowns = new ArrayList<>();
+        for (int i : validMonths) {
+            if (towns.get(i).equals("JURONG WEST")) {
+                validTowns.add(i);
+            }
+        }
+
+        List<Object> areas = store.getColumn("floor_area_sqm");
+
+        // Only collect areas that correspond to the valid months and towns
+        List<Integer> validAreas = new ArrayList<>();
+        for (int i : validTowns) {
+            if (Double.parseDouble((String) areas.get(i))  >= 80) {
+                    validAreas.add(i);
+                }
+            }
+        
+        List<Object> prices = store.getColumn("resale_price");
+
+        // Now, process the prices that correspond to the valid rows from the previous filters
+        for (int i : validAreas) {
+            filteredPrices.add(prices.get(i));
+            filteredAreas.add(areas.get(i));
+            matches[0]++;
+            }
         
         long totalTime = (System.nanoTime() - startTime) / 1_000_000;
         
