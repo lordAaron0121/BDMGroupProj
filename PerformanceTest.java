@@ -1,19 +1,30 @@
 import java.io.IOException;
-import java.util.List;
-import java.util.ArrayList;
+import java.util.*;
 import java.text.NumberFormat;
+import java.util.function.Predicate;
+import java.nio.file.Paths;
 
 public class PerformanceTest {
     private static final int WARMUP_RUNS = 2;
     private static final int TEST_RUNS = 5;
+    private static final String DATA_DIR = "data";
     
     public static void main(String[] args) throws IOException {
         // Load data
         String filePath = "../data/ResalePricesSingapore.csv";
         ColumnStore store = CSVLoader.loadCSV(filePath);
         
+        // Initialize our storage implementations
+        FileColumnStore fileStore = new FileColumnStore(DATA_DIR + "/columns");
+        RowStore rowStore = new RowStore();
+        ZoneMapStore zoneStore = new ZoneMapStore(5000);  // Changed to 5000 for better balance
+        
+        // Load data into storage implementations
+        System.out.println("Loading data into storage implementations...");
+        loadDataIntoStores(store, fileStore, rowStore, zoneStore);  // Modified to include zoneStore
+        
         // Print initial statistics
-        System.out.println("Dataset Statistics:");
+        System.out.println("\nDataset Statistics:");
         System.out.println("------------------");
         System.out.println("Total records: " + store.getColumn("month").size());
         printMemoryUsage();
@@ -23,16 +34,22 @@ public class PerformanceTest {
         System.out.println("Performing warmup runs...");
         for (int i = 0; i < WARMUP_RUNS; i++) {
             runOriginalApproach(store);
-            runOptimizedApproach(store);
+            runFileColumnStoreApproach(fileStore);
+            runRowStoreApproach(rowStore);
+            runZoneMapApproach(zoneStore);  // Added zone map warmup
             QueryCache.clear();
         }
         System.out.println("Warmup completed.\n");
         
         // Test runs
         long[] originalTimes = new long[TEST_RUNS];
-        long[] optimizedTimes = new long[TEST_RUNS];
+        long[] fileStoreTimes = new long[TEST_RUNS];
+        long[] rowStoreTimes = new long[TEST_RUNS];
+        long[] zoneMapTimes = new long[TEST_RUNS];
         int[] originalMatches = new int[TEST_RUNS];
-        int[] optimizedMatches = new int[TEST_RUNS];
+        int[] fileStoreMatches = new int[TEST_RUNS];
+        int[] rowStoreMatches = new int[TEST_RUNS];
+        int[] zoneMapMatches = new int[TEST_RUNS];
         
         System.out.println("Running performance tests...");
         for (int i = 0; i < TEST_RUNS; i++) {
@@ -43,17 +60,59 @@ public class PerformanceTest {
             originalTimes[i] = originalResult.executionTime;
             originalMatches[i] = originalResult.matchCount;
             
-            // Optimized approach
-            TestResult optimizedResult = runOptimizedApproach(store);
-            optimizedTimes[i] = optimizedResult.executionTime;
-            optimizedMatches[i] = optimizedResult.matchCount;
+            // FileColumnStore approach
+            TestResult fileStoreResult = runFileColumnStoreApproach(fileStore);
+            fileStoreTimes[i] = fileStoreResult.executionTime;
+            fileStoreMatches[i] = fileStoreResult.matchCount;
+            
+            // RowStore approach
+            TestResult rowStoreResult = runRowStoreApproach(rowStore);
+            rowStoreTimes[i] = rowStoreResult.executionTime;
+            rowStoreMatches[i] = rowStoreResult.matchCount;
+            
+            // ZoneMap approach
+            TestResult zoneMapResult = runZoneMapApproach(zoneStore);
+            zoneMapTimes[i] = zoneMapResult.executionTime;
+            zoneMapMatches[i] = zoneMapResult.matchCount;
             
             QueryCache.clear();
             System.out.println();
         }
         
         // Print detailed results
-        printDetailedResults(originalTimes, optimizedTimes, originalMatches, optimizedMatches);
+        printDetailedResults(originalTimes, fileStoreTimes, rowStoreTimes, zoneMapTimes,
+                           originalMatches, fileStoreMatches, rowStoreMatches, zoneMapMatches);
+                           
+        // Cleanup
+        fileStore.deleteAllFiles();
+    }
+
+    private static void loadDataIntoStores(ColumnStore store, FileColumnStore fileStore, 
+                                         RowStore rowStore, ZoneMapStore zoneStore) {
+        // Get all columns
+        List<Object> months = store.getColumn("month");
+        List<Object> towns = store.getColumn("town");
+        List<Object> areas = store.getColumn("floor_area_sqm");
+        List<Object> prices = store.getColumn("resale_price");
+        
+        // Load into FileColumnStore
+        fileStore.saveColumn("month", months);
+        fileStore.saveColumn("town", towns);
+        fileStore.saveColumn("floor_area_sqm", areas);
+        fileStore.saveColumn("resale_price", prices);
+        
+        // Load into RowStore
+        for (int i = 0; i < months.size(); i++) {
+            Map<String, Object> row = new HashMap<>();
+            row.put("month", months.get(i));
+            row.put("town", towns.get(i));
+            row.put("floor_area_sqm", areas.get(i));
+            row.put("resale_price", prices.get(i));
+            rowStore.addRow(row);
+        }
+
+        // Load into ZoneMapStore
+        zoneStore.loadFromColumnStore(store);
     }
     
     private static TestResult runOriginalApproach(ColumnStore store) {
@@ -84,96 +143,96 @@ public class PerformanceTest {
         return new TestResult(totalTime, matches[0]);
     }
     
-    private static TestResult runOptimizedApproach(ColumnStore store) {
-        final int[] matches = {0};
-        List<Object> filteredPrices = new ArrayList<>();
-        List<Object> filteredAreas = new ArrayList<>();
-        
+    private static TestResult runFileColumnStoreApproach(FileColumnStore store) {
         long startTime = System.nanoTime();
         
-        // Get all columns at once to avoid multiple lookups
-        List<Object> months = store.getColumn("month");
-        List<Object> towns = store.getColumn("town");
-        List<Object> areas = store.getColumn("floor_area_sqm");
-        List<Object> prices = store.getColumn("resale_price");
+        // Define conditions for sequential filtering
+        List<String> columnNames = Arrays.asList("month", "town", "floor_area_sqm");
+        List<Predicate<Object>> conditions = Arrays.asList(
+            month -> month.equals("2021-03") || month.equals("2021-04"),
+            town -> town.equals("JURONG WEST"),
+            area -> Double.parseDouble((String) area) >= 80
+        );
         
-        // Single pass with early termination conditions
-        for (int i = 0; i < months.size(); i++) {
-            String month = (String) months.get(i);
-            // Check month first as it's likely to filter out most records
-            if (month.equals("2021-03") || month.equals("2021-04")) {
-                // Only check town if month matches
-                if (towns.get(i).equals("JURONG WEST")) {
-                    // Only parse area if both month and town match
-                    double area = Double.parseDouble((String) areas.get(i));
-                    if (area >= 80) {
-                        matches[0]++;
-                        filteredPrices.add(prices.get(i));
-                        filteredAreas.add(areas.get(i));
-                    }
-                }
-            }
+        // Get qualified indexes
+        List<Integer> qualifiedIndexes = store.sequentialFilter(columnNames, conditions);
+        
+        // Get prices and areas for qualified records
+        List<Object> prices = store.readColumn("resale_price");
+        List<Object> areas = store.readColumn("floor_area_sqm");
+        
+        List<Object> filteredPrices = new ArrayList<>();
+        List<Object> filteredAreas = new ArrayList<>();
+        for (Integer index : qualifiedIndexes) {
+            filteredPrices.add(prices.get(index));
+            filteredAreas.add(areas.get(index));
         }
         
         long totalTime = (System.nanoTime() - startTime) / 1_000_000;
-        
-        // Print statistics after timing (unchanged)
-        if (matches[0] > 0) {
-            System.out.println("\nHDB Resale Statistics (Area >= 80 sq m):");
-            System.out.println("----------------------------------------");
-            double minPrice = QueryProcessor.min(filteredPrices);
-            double avgPrice = QueryProcessor.average(filteredPrices);
-            double stdDev = QueryProcessor.standardDeviation(filteredPrices);
-            double minPricePerSqm = QueryProcessor.minPricePerSquareMeter(filteredPrices, filteredAreas);
-            
-            System.out.printf("Minimum Price: $%.2f\n", minPrice);
-            System.out.printf("Average Price: $%.2f\n", avgPrice);
-            System.out.printf("Standard Deviation of Price: $%.2f\n", stdDev);
-            System.out.printf("Minimum Price per Square Meter: $%.2f\n", minPricePerSqm);
-            System.out.printf("Number of matching flats: %d\n\n", matches[0]);
-            
-            // Validation output
-            System.out.println("Debug Information:");
-            System.out.println("------------------");
-            System.out.println("First 5 matching records:");
-            for (int i = 0; i < Math.min(5, filteredPrices.size()); i++) {
-                System.out.printf("Price: $%s, Area: %s sq m\n", 
-                    filteredPrices.get(i), 
-                    filteredAreas.get(i));
-            }
-        }
-        
-        return new TestResult(totalTime, matches[0]);
+        return new TestResult(totalTime, qualifiedIndexes.size());
     }
     
-    private static void printDetailedResults(long[] originalTimes, long[] optimizedTimes, 
-                                          int[] originalMatches, int[] optimizedMatches) {
-        System.out.println("\nDetailed Performance Results:");
-        System.out.println("---------------------------");
+    private static TestResult runRowStoreApproach(RowStore store) {
+        long startTime = System.nanoTime();
         
-        // Calculate averages
-        double avgOriginal = average(originalTimes);
-        double avgOptimized = average(optimizedTimes);
-        double improvement = ((avgOriginal - avgOptimized) / avgOriginal) * 100;
+        // Define conditions for filtering
+        Map<String, Predicate<Object>> conditions = new HashMap<>();
+        conditions.put("month", month -> month.equals("2021-03") || month.equals("2021-04"));
+        conditions.put("town", town -> town.equals("JURONG WEST"));
+        conditions.put("floor_area_sqm", area -> Double.parseDouble((String) area) >= 80);
         
-        // Print timing results
-        System.out.println("Original Approach:");
-        System.out.printf("  Average time: %.2fms\n", avgOriginal);
-        System.out.printf("  Min time: %dms\n", min(originalTimes));
-        System.out.printf("  Max time: %dms\n", max(originalTimes));
-        System.out.printf("  Std Dev: %.2fms\n", standardDeviation(originalTimes));
-        System.out.printf("  Matches found: %d\n", originalMatches[0]);
+        // Filter rows
+        List<Map<String, Object>> filteredRows = store.filter(conditions);
         
-        System.out.println("\nOptimized Approach:");
-        System.out.printf("  Average time: %.2fms\n", avgOptimized);
-        System.out.printf("  Min time: %dms\n", min(optimizedTimes));
-        System.out.printf("  Max time: %dms\n", max(optimizedTimes));
-        System.out.printf("  Std Dev: %.2fms\n", standardDeviation(optimizedTimes));
-        System.out.printf("  Matches found: %d\n", optimizedMatches[0]);
+        // Extract prices and areas
+        List<Object> filteredPrices = new ArrayList<>();
+        List<Object> filteredAreas = new ArrayList<>();
+        for (Map<String, Object> row : filteredRows) {
+            filteredPrices.add(row.get("resale_price"));
+            filteredAreas.add(row.get("floor_area_sqm"));
+        }
         
-        System.out.printf("\nOverall improvement: %.2f%%\n", improvement);
+        long totalTime = (System.nanoTime() - startTime) / 1_000_000;
+        return new TestResult(totalTime, filteredRows.size());
+    }
+    
+    private static TestResult runZoneMapApproach(ZoneMapStore store) {
+        long startTime = System.nanoTime();
         
-        // Print final memory usage
+        List<ZoneMapStore.Record> results = store.filter(
+            "2021-03", "2021-04", "JURONG WEST", 80.0
+        );
+        
+        long totalTime = (System.nanoTime() - startTime) / 1_000_000;
+        return new TestResult(totalTime, results.size());
+    }
+    
+    private static void printDetailedResults(long[] originalTimes, long[] fileStoreTimes, 
+                                           long[] rowStoreTimes, long[] zoneMapTimes,
+                                           int[] originalMatches, int[] fileStoreMatches, 
+                                           int[] rowStoreMatches, int[] zoneMapMatches) {
+        System.out.println("\nPerformance Results:");
+        System.out.println("-------------------");
+        System.out.println("Original approach times: " + Arrays.toString(originalTimes) + " ms");
+        System.out.println("FileColumnStore times: " + Arrays.toString(fileStoreTimes) + " ms");
+        System.out.println("RowStore times: " + Arrays.toString(rowStoreTimes) + " ms");
+        System.out.println("ZoneMap times: " + Arrays.toString(zoneMapTimes) + " ms");
+        
+        System.out.println("\nAverage times:");
+        System.out.printf("Original approach average: %.2fms\n", average(originalTimes));
+        System.out.printf("FileColumnStore approach average: %.2fms\n", average(fileStoreTimes));
+        System.out.printf("RowStore approach average: %.2fms\n", average(rowStoreTimes));
+        System.out.printf("ZoneMap approach average: %.2fms\n", average(zoneMapTimes));
+        
+        System.out.println("\nMatches found:");
+        System.out.println("--------------");
+        System.out.printf("Original approach: %d\n", originalMatches[0]);
+        System.out.printf("FileColumnStore approach: %d\n", fileStoreMatches[0]);
+        System.out.printf("RowStore approach: %d\n", rowStoreMatches[0]);
+        System.out.printf("ZoneMap approach: %d\n", zoneMapMatches[0]);
+        
+        System.out.println("\nMemory Usage:");
+        System.out.println("-------------");
         printMemoryUsage();
     }
     
@@ -198,31 +257,6 @@ public class PerformanceTest {
             sum += value;
         }
         return (double) sum / values.length;
-    }
-    
-    private static long min(long[] values) {
-        long min = values[0];
-        for (long value : values) {
-            if (value < min) min = value;
-        }
-        return min;
-    }
-    
-    private static long max(long[] values) {
-        long max = values[0];
-        for (long value : values) {
-            if (value > max) max = value;
-        }
-        return max;
-    }
-    
-    private static double standardDeviation(long[] values) {
-        double avg = average(values);
-        double sumSquaredDiff = 0;
-        for (long value : values) {
-            sumSquaredDiff += Math.pow(value - avg, 2);
-        }
-        return Math.sqrt(sumSquaredDiff / values.length);
     }
     
     private static class TestResult {
