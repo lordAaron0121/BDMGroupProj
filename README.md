@@ -5,19 +5,19 @@ This project implements and compares different data storage and query optimizati
 ## Approaches Implemented
 
 ### 1. Split Row Store
-A hybrid approach that splits row-based data into multiple files based on query access patterns.
+A hybrid approach that splits row-based data into groups of related columns, storing each group in a separate file.
 
 **Pros:**
-- Reduced I/O by only reading relevant columns
-- Better cache utilization with smaller files
-- Flexible grouping based on query patterns
-- Potential for parallel processing
+- Partial I/O reduction by reading only relevant column groups
+- Maintains row-locality within related column groups
+- Flexible grouping based on common query patterns
+- Potential for parallel processing of different groups
 
 **Cons:**
 - Multiple file I/O operations
 - Overhead from record ID management
 - Complex implementation
-- Storage space overhead
+- Storage space overhead from data duplication
 
 ### 2. File-Based Column Store
 A columnar storage implementation that persists each column to disk separately.
