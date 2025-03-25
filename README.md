@@ -4,26 +4,22 @@ This project implements and compares different data storage and query optimizati
 
 ## Approaches Implemented
 
-### 1. Split Row Store
-A hybrid approach that splits row-based data into groups of related columns, storing each group in a separate file.
+### 1. File-Based Row Store
+A row storage approach that persists in disk
 
 **Pros:**
-- Partial I/O reduction by reading only relevant column groups
-- Maintains row-locality within related column groups
-- Flexible grouping based on common query patterns
-- Potential for parallel processing of different groups
+- Easy to implement and understand
+- Updating Row storages is less expensive
 
 **Cons:**
-- Multiple file I/O operations
+- Higher cost because entire rows have to be read for even a single column
 - Overhead from record ID management
-- Complex implementation
-- Storage space overhead from data duplication
 
 ### 2. File-Based Column Store
 A columnar storage implementation that persists each column to disk separately.
 
 **Pros:**
-- Reduced memory usage through file-based storage
+- Reduced read time and memory usage by reading only neccessary columns
 - Sequential filtering optimization
 - Persistent storage
 - Good for large datasets that don't fit in memory
@@ -48,13 +44,24 @@ An optimized approach using zone maps to enable data pruning during query execut
 - Zone size tuning required
 - Setup cost for zone creation
 
+### 4. Compressed File-Based Column Store
+Columnar storage implementation with Compressed data
+
+**Pros:**
+- Reduced disk space by storing compressed data
+- Faster read times due to lower number of bytes
+
+**Cons:**
+- Overhead from mapping and un-mapping of data
+
+
 ## Implementation Details
 
-### Split Row Store Implementation
-- Data is split into logical groups based on query patterns
-- Each group contains a subset of columns stored in row format
-- Record IDs maintain relationships between split files
-- Optimized for specific query patterns
+### File-Based Row Store Implementation
+- Data is split into n-equal subsets, each of which are stored row-based in disk
+- The value n is decided by the number of columns required for the query
+- This is to allow better apple-to-apple comparison of I/O cost between column-based and row-based storage
+- For example, a query has a condition using "month", and another condition using "town". A column-based storage approach that has each column stored in separate files in disk, will read only these 2 files. This row-based approach should read 2 files as well. Therefore the data is split into 2 equal subsets of rows, each stored in disk separately
 
 ### Zone Map Implementation
 The zone map approach divides the data into zones and maintains the following statistics for each zone:
