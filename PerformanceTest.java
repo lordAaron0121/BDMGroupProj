@@ -76,8 +76,8 @@ public class PerformanceTest {
                            splitStoreMatches, fileStoreMatches, zoneMapMatches);
                            
         // Cleanup
-        fileStore.deleteAllFiles();
-        splitStore.deleteAllFiles();
+        // fileStore.deleteAllFiles();
+        // splitStore.deleteAllFiles();
     }
 
     private static void loadDataIntoStores(ColumnStore store, FileColumnStore fileStore, 
