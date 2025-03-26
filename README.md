@@ -87,4 +87,37 @@ Filtering criteria:
 - Minimum Area: 80.0 sqm
 
 Performance metrics (average execution time):
-```
+
+## Recent Updates and Improvements
+
+### Row Store Optimization (Latest Update)
+We have improved the row-based storage implementation to provide a more fair comparison with the column-based approach:
+
+1. **Equal File Distribution**
+   - Data is now split into exactly 4 files, matching the number of columns used in queries
+   - Each file contains approximately equal number of rows
+   - All columns are preserved in each file for complete row access
+
+2. **Implementation Details**
+   - Removed the previous group-based storage approach
+   - Implemented automatic data partitioning into 4 equal parts
+   - Fixed serialization issues with Java's SubList by creating proper ArrayList copies
+   - Improved error handling and file management
+
+3. **Performance Considerations**
+   - Both row and column approaches now read exactly 4 files during query execution
+   - This provides a more accurate I/O comparison between approaches
+   - The row-based approach can potentially benefit from parallel file reading
+   - Memory usage is more evenly distributed across files
+
+4. **Trade-offs**
+   - Pros:
+     - More balanced I/O operations
+     - Better comparison baseline with column-based approach
+     - Potential for parallel processing
+   - Cons:
+     - Still needs to read complete rows
+     - Additional storage overhead from column duplication
+     - Complexity in maintaining file boundaries
+
+This update ensures that our performance comparisons between row-based and column-based approaches are more meaningful by equalizing the number of file operations required for each query.
