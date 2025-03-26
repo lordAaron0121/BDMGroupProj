@@ -105,13 +105,8 @@ public class PerformanceTest {
             rows.add(row);
         }
 
-        // Load into SplitRowStore
-        splitStore.createGroup("time_location", Arrays.asList("month", "town"));
-        splitStore.createGroup("area", Arrays.asList("floor_area_sqm"));
-        splitStore.createGroup("price", Arrays.asList("resale_price"));
-        splitStore.saveData("time_location", rows);
-        splitStore.saveData("area", rows);
-        splitStore.saveData("price", rows);
+        // Load into SplitRowStore (now splits into 4 equal parts)
+        splitStore.saveData(rows);
 
         // Load into ZoneMapStore
         zoneStore.loadFromColumnStore(store);
@@ -160,52 +155,25 @@ public class PerformanceTest {
     private static TestResult runSplitRowStoreApproach(SplitRowStore store) {
         long startTime = System.nanoTime();
         
-        // First filter by month and town using the time_location group
-        Map<String, Predicate<Object>> timeLocationConditions = new HashMap<>();
-        timeLocationConditions.put("month", month -> month.equals("2021-03") || month.equals("2021-04"));
-        timeLocationConditions.put("town", town -> town.equals("JURONG WEST"));
-        List<Map<String, Object>> timeLocationFiltered = store.filter("time_location", timeLocationConditions);
+        // Define conditions for filtering
+        Map<String, Predicate<Object>> conditions = new HashMap<>();
+        conditions.put("month", month -> month.equals("2021-03") || month.equals("2021-04"));
+        conditions.put("town", town -> town.equals("JURONG WEST"));
+        conditions.put("floor_area_sqm", area -> Double.parseDouble((String) area) >= 80);
         
-        // Then filter by area using the area group
-        Map<String, Predicate<Object>> areaConditions = new HashMap<>();
-        areaConditions.put("floor_area_sqm", area -> Double.parseDouble((String) area) >= 80);
-        List<Map<String, Object>> areaFiltered = store.filter("area", areaConditions);
+        // Filter rows that match all conditions
+        List<Map<String, Object>> filteredRows = store.filter(conditions);
         
-        // Create maps for quick lookups
-        Map<Integer, Map<String, Object>> timeLocationById = new HashMap<>();
-        Map<Integer, Map<String, Object>> areaById = new HashMap<>();
-        Map<Integer, Map<String, Object>> priceById = new HashMap<>();
-        
-        for (Map<String, Object> row : timeLocationFiltered) {
-            timeLocationById.put((Integer) row.get("_id"), row);
-        }
-        
-        for (Map<String, Object> row : areaFiltered) {
-            areaById.put((Integer) row.get("_id"), row);
-        }
-        
-        // Get prices for all records
-        List<Map<String, Object>> priceData = store.readGroup("price");
-        for (Map<String, Object> row : priceData) {
-            priceById.put((Integer) row.get("_id"), row);
-        }
-        
-        // Find records that match all conditions
+        // Extract prices and areas for analysis
         List<Object> filteredPrices = new ArrayList<>();
         List<Object> filteredAreas = new ArrayList<>();
-        Set<Integer> matchingIds = new HashSet<>(timeLocationById.keySet());
-        matchingIds.retainAll(areaById.keySet());
-        
-        // Collect results in order
-        for (Integer id : matchingIds) {
-            if (timeLocationById.containsKey(id) && areaById.containsKey(id) && priceById.containsKey(id)) {
-                filteredPrices.add(priceById.get(id).get("resale_price"));
-                filteredAreas.add(areaById.get(id).get("floor_area_sqm"));
-            }
+        for (Map<String, Object> row : filteredRows) {
+            filteredPrices.add(row.get("resale_price"));
+            filteredAreas.add(row.get("floor_area_sqm"));
         }
         
         long totalTime = (System.nanoTime() - startTime) / 1_000_000;
-        return new TestResult(totalTime, matchingIds.size());
+        return new TestResult(totalTime, filteredRows.size());
     }
     
     private static void printDetailedResults(long[] splitStoreTimes, long[] fileStoreTimes, 

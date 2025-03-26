@@ -10,6 +10,7 @@ A row storage approach that persists in disk
 **Pros:**
 - Easy to implement and understand
 - Updating Row storages is less expensive
+- Equal number of file reads as column-based approach for fair comparison
 
 **Cons:**
 - Higher cost because entire rows have to be read for even a single column
@@ -58,10 +59,11 @@ Columnar storage implementation with Compressed data
 ## Implementation Details
 
 ### File-Based Row Store Implementation
-- Data is split into n-equal subsets, each of which are stored row-based in disk
-- The value n is decided by the number of columns required for the query
-- This is to allow better apple-to-apple comparison of I/O cost between column-based and row-based storage
-- For example, a query has a condition using "month", and another condition using "town". A column-based storage approach that has each column stored in separate files in disk, will read only these 2 files. This row-based approach should read 2 files as well. Therefore the data is split into 2 equal subsets of rows, each stored in disk separately
+- Data is split into 4 equal subsets of rows, each stored in a separate file
+- This matches the number of files read in the column-based approach (4 columns: month, town, area, price)
+- Each file contains complete rows with all columns
+- During query execution, all 4 files are read and filtered in parallel
+- This provides a fair comparison with the column-based approach in terms of I/O operations
 
 ### Zone Map Implementation
 The zone map approach divides the data into zones and maintains the following statistics for each zone:
