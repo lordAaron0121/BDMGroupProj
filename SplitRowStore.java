@@ -45,7 +45,8 @@ public class SplitRowStore {
                 break; // No more rows to process
             }
 
-            List<Map<String, Object>> fileRows = rows.subList(startIdx, endIdx);
+            // Create a new ArrayList from the subList to ensure serializability
+            List<Map<String, Object>> fileRows = new ArrayList<>(rows.subList(startIdx, endIdx));
             String filePath = baseDirectory + File.separator + "part_" + i + FILE_EXTENSION;
 
             try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(filePath))) {
