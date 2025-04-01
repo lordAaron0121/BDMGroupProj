@@ -7,4 +7,5 @@ target/
 .settings/
 .classpath
 .project
-/data
+/compressed_column_store
+/normal_column_store
