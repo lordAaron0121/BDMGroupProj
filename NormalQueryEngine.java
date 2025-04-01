@@ -93,7 +93,7 @@ public class NormalQueryEngine {
             double price = Double.parseDouble(prices.get(index));
             variance += Math.pow(price - mean, 2);
         }
-        variance /= subset.size();
+        variance /= (subset.size() - 1);
         
         // Return standard deviation (square root of variance)
         return Math.sqrt(variance);
@@ -115,7 +115,7 @@ public class NormalQueryEngine {
             sum += Double.parseDouble(prices.get(index));
         }
         
-        return sum / subset.size();
+        return sum / (subset.size()-1);
     }
     
     /**

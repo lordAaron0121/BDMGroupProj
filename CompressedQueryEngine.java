@@ -296,7 +296,7 @@ public class CompressedQueryEngine {
             double price = Double.parseDouble(prices.get(index));
             variance += Math.pow(price - mean, 2);
         }
-        variance /= subset.size();
+        variance /= (subset.size()-1);
         
         // Return standard deviation (square root of variance)
         return Math.sqrt(variance);
