@@ -6,4 +6,7 @@ target/
 .vscode/
 .settings/
 .classpath
-.project 
+.project
+
+/compressed_column_store
+/normal_column_store
