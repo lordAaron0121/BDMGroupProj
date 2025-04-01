@@ -112,7 +112,10 @@ public class Main {
                 System.out.println("Query speedup with compression: " + String.format("%.2f%%", speedupPercent));
             }
             
-            // 3. Print query results for verification
+            // 3. Offline Memory Analysis
+            performDetailedMemoryAnalysis(normalColumnStoreDir, compressedColumnStoreDir);
+            
+            // 4. Print query results for verification
             System.out.println("\n--- QUERY RESULTS VERIFICATION ---");
             
             System.out.println("\nNormal Column Store Results:");
@@ -125,6 +128,73 @@ public class Main {
             System.err.println("Error: " + e.getMessage());
             e.printStackTrace();
         }
+    }
+
+    private static void performDetailedMemoryAnalysis(String normalColumnStoreDir, String compressedColumnStoreDir) {
+        System.out.println("\n--- DETAILED COLUMN-BY-COLUMN MEMORY ANALYSIS ---");
+        
+        File normalDir = new File(normalColumnStoreDir);
+        File compressedDir = new File(compressedColumnStoreDir);
+        
+        if (!normalDir.exists() || !normalDir.isDirectory() || !compressedDir.exists() || !compressedDir.isDirectory()) {
+            System.err.println("Error: One or both column store directories do not exist.");
+            return;
+        }
+        
+        // Get all .col files in normal column store directory
+        File[] normalFiles = normalDir.listFiles((dir, name) -> name.endsWith(".col"));
+        if (normalFiles == null || normalFiles.length == 0) {
+            System.err.println("Error: No .col files found in normal column store directory.");
+            return;
+        }
+        
+        long totalNormalSize = 0;
+        long totalCompressedSize = 0;
+        
+        for (File normalFile : normalFiles) {
+            String columnName = normalFile.getName().replace(".col", "");
+            long normalSize = normalFile.length();
+            totalNormalSize += normalSize;
+            
+            // Find corresponding compressed file and dictionary file
+            File compressedFile = new File(compressedDir, columnName + ".cmp");
+            File dictFile = new File(compressedDir, columnName + ".dict");
+            
+            long compressedSize = 0;
+            if (compressedFile.exists()) {
+                compressedSize += compressedFile.length();
+            } else {
+                System.out.println("Warning: No compressed file found for column: " + columnName);
+            }
+            
+            // Add dictionary size if it exists
+            if (dictFile.exists()) {
+                compressedSize += dictFile.length();
+            }
+            
+            totalCompressedSize += compressedSize;
+            
+            // Calculate metrics
+            double reductionPercent = 100.0 * (normalSize - compressedSize) / normalSize;
+            long memorySaved = normalSize - compressedSize;
+            
+            // Print column analysis
+            System.out.printf("%s: compressed memory = %s | non compressed memory = %s | Memory reduction with compression: %.2f%% | Memory saved: %s%n",
+                    columnName,
+                    formatMemorySize(compressedSize),
+                    formatMemorySize(normalSize),
+                    reductionPercent,
+                    formatMemorySize(memorySaved));
+        }
+        
+        // Print total analysis
+        double totalReductionPercent = 100.0 * (totalNormalSize - totalCompressedSize) / totalNormalSize;
+        long totalMemorySaved = totalNormalSize - totalCompressedSize;
+        
+        System.out.println("\nTOTAL: compressed memory = " + formatMemorySize(totalCompressedSize) +
+                " | non compressed memory = " + formatMemorySize(totalNormalSize) +
+                " | Memory reduction with compression: " + String.format("%.2f%%", totalReductionPercent) +
+                " | Memory saved: " + formatMemorySize(totalMemorySaved));
     }
     
     private static void printQueryResults(Map<String, Double> results) {

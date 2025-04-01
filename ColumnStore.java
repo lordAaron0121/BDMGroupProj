@@ -17,6 +17,10 @@ public class ColumnStore {
             dir.mkdirs();
         }
     }
+
+    public String getDataDirectory() {
+        return dataDirectory;
+    }
     
     public void loadFromCSV(String csvFilePath) throws IOException {
         try (BufferedReader reader = new BufferedReader(new FileReader(csvFilePath))) {
