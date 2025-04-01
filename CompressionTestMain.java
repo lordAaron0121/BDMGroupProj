@@ -3,7 +3,7 @@ import java.io.IOException;
 import java.util.Map;
 import java.io.File;
 
-public class Main {
+public class CompressionTestMain {
     public static void main(String[] args) {
         try {
             String csvFilePath = "../data/ResalePricesSingapore.csv";
@@ -113,7 +113,7 @@ public class Main {
             }
             
             // 3. Offline Memory Analysis
-            performDetailedMemoryAnalysis(normalColumnStoreDir, compressedColumnStoreDir);
+            performDetailedMemoryAnalysis(normalColumnStoreDir, compressedColumnStoreDir);       
             
             // 4. Print query results for verification
             System.out.println("\n--- QUERY RESULTS VERIFICATION ---");
