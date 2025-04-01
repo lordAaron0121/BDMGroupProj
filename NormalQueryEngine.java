@@ -1,10 +1,10 @@
 import java.io.IOException;
 import java.util.*;
 
-public class QueryEngine {
-    private ColumnStore columnStore;
+public class NormalQueryEngine {
+    private NormalColumnStore columnStore;
     
-    public QueryEngine(ColumnStore columnStore) {
+    public NormalQueryEngine(NormalColumnStore columnStore) {
         this.columnStore = columnStore;
     }
 

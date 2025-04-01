@@ -3,11 +3,11 @@ import java.io.*;
 import java.nio.file.*;
 import java.util.*;
 
-public class ColumnStore {
+public class NormalColumnStore {
     private String dataDirectory;
     private List<String> columnNames;
     
-    public ColumnStore(String dataDirectory) {
+    public NormalColumnStore(String dataDirectory) {
         this.dataDirectory = dataDirectory;
         this.columnNames = new ArrayList<>();
         

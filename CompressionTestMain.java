@@ -42,7 +42,7 @@ public class CompressionTestMain {
             Runtime.getRuntime().gc(); // Request garbage collection before measurement
             long normalStartMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
             
-            ColumnStore normalStore = new ColumnStore(normalColumnStoreDir);
+            NormalColumnStore normalStore = new NormalColumnStore(normalColumnStoreDir);
             System.out.println("Loading data from CSV file into normal column store: " + csvFile.getAbsolutePath());
             normalStore.loadFromCSV(csvFilePath);
             
@@ -79,7 +79,7 @@ public class CompressionTestMain {
             System.out.println("Running queries for " + yearMonth + " in " + town);
             
             // Initialize query engines
-            QueryEngine normalQueryEngine = new QueryEngine(normalStore);
+            NormalQueryEngine normalQueryEngine = new NormalQueryEngine(normalStore);
             CompressedQueryEngine compressedQueryEngine = new CompressedQueryEngine(compressedStore);
             
             // Run normal queries and measure time
