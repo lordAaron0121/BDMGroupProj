@@ -11,6 +11,7 @@ public class NormalQueryEngine {
     public List<Integer> getSubsetByMonthAndTown(String yearMonth, String town) throws IOException {
         List<String> months = columnStore.getColumnData("month");
         List<String> towns = columnStore.getColumnData("town");
+        List<String> floor = columnStore.getColumnData("floor_area_sqm");
         List<Integer> matchingIndices = new ArrayList<>();
         
         // Calculate the next month for the range (manually, without using YearMonth)
@@ -37,10 +38,12 @@ public class NormalQueryEngine {
         for (int i = 0; i < months.size(); i++) {
             String monthValue = months.get(i);
             String townValue = towns.get(i);
+            Double floorValue = Double.parseDouble(floor.get(i));
             
             // Simple string matching: month equals yearMonth OR month equals nextMonthStr
             if ((monthValue.equals(yearMonth) || monthValue.equals(nextMonthStr)) && 
-                townValue.equals(town)) {
+                townValue.equals(town) &&
+                floorValue >= 80) {
                 matchingIndices.add(i);
             }
         }
