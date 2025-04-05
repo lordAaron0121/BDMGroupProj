@@ -10,3 +10,4 @@ target/
 
 /compressed_column_store
 /normal_column_store
+/ZoneMap

@@ -118,8 +118,8 @@ public class PerformanceTest {
         // Define conditions for sequential filtering
         List<String> columnNames = Arrays.asList("month", "town", "floor_area_sqm");
         List<Predicate<Object>> conditions = Arrays.asList(
-            month -> month.equals("2021-03") || month.equals("2021-04"),
-            town -> town.equals("JURONG WEST"),
+            month -> month.equals("2016-04") || month.equals("2016-05"),
+            town -> town.equals("CHOA CHU KANG"),
             area -> Double.parseDouble((String) area) >= 80
         );
         
@@ -145,7 +145,7 @@ public class PerformanceTest {
         long startTime = System.nanoTime();
         
         List<ZoneMapStore.Record> results = store.filter(
-            "2021-03", "2021-04", "JURONG WEST", 80.0
+            "2016-04", "2016-05", "CHOA CHU KANG", 80.0
         );
         
         long totalTime = (System.nanoTime() - startTime) / 1_000_000;
@@ -157,8 +157,8 @@ public class PerformanceTest {
         
         // Define conditions for filtering
         Map<String, Predicate<Object>> conditions = new HashMap<>();
-        conditions.put("month", month -> month.equals("2021-03") || month.equals("2021-04"));
-        conditions.put("town", town -> town.equals("JURONG WEST"));
+        conditions.put("month", month -> month.equals("2016-04") || month.equals("2016-05"));
+        conditions.put("town", town -> town.equals("CHOA CHU KANG"));
         conditions.put("floor_area_sqm", area -> Double.parseDouble((String) area) >= 80);
         
         // Filter rows that match all conditions
