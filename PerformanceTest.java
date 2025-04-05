@@ -82,26 +82,23 @@ public class PerformanceTest {
 
     private static void loadDataIntoStores(ColumnStore store, FileColumnStore fileStore, 
                                          SplitRowStore splitStore, ZoneMapStore zoneStore) {
-        // Get all columns
-        List<Object> months = store.getColumn("month");
-        List<Object> towns = store.getColumn("town");
-        List<Object> areas = store.getColumn("floor_area_sqm");
-        List<Object> prices = store.getColumn("resale_price");
+        for (String key : store.getColumnNames()) {
+            // Retrieve the column for the current key using store.getColumn(key)
+            List<Object> columnData = store.getColumn(key);
+
+            // Save the column data in fileStore
+            fileStore.saveColumn(key, columnData);
+        }
         
-        // Load into FileColumnStore
-        fileStore.saveColumn("month", months);
-        fileStore.saveColumn("town", towns);
-        fileStore.saveColumn("floor_area_sqm", areas);
-        fileStore.saveColumn("resale_price", prices);
-        
-        // Create row data
+        String firstColumn = store.getColumnNames().iterator().next(); // Get the first column name
+
+        // Load into RowStore
         List<Map<String, Object>> rows = new ArrayList<>();
-        for (int i = 0; i < months.size(); i++) {
+        for (int i = 0; i < store.getColumn(firstColumn).size(); i++) {
             Map<String, Object> row = new HashMap<>();
-            row.put("month", months.get(i));
-            row.put("town", towns.get(i));
-            row.put("floor_area_sqm", areas.get(i));
-            row.put("resale_price", prices.get(i));
+            for (String key : store.getColumnNames()) {
+                row.put(key, store.getColumn(key).get(i));
+            }
             rows.add(row);
         }
 
