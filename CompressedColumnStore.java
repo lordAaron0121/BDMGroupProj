@@ -277,7 +277,7 @@ public class CompressedColumnStore {
         }
     }
     
-    private List<String> getDecompressedColumnData(String columnName) throws IOException {
+    public List<String> getDecompressedColumnData(String columnName) throws IOException {
         // Load dictionary and get bits per value
         Map<Integer, String> reverseDictionary = new HashMap<>();
         int bitsPerValue = loadDictionary(columnName, reverseDictionary);
