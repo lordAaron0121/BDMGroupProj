@@ -11,6 +11,7 @@ public class CompressedQueryEngine {
     public List<Integer> getSubsetByMonthAndTown(String yearMonth, String town) throws IOException {
         List<String> months = columnStore.getColumnData("month");
         List<String> towns = columnStore.getColumnData("town");
+        List<String> floor = columnStore.getColumnData("floor_area_sqm");
         List<Integer> matchingIndices = new ArrayList<>();
         
         // Calculate the next month for the range (manually, without using YearMonth)
@@ -37,10 +38,12 @@ public class CompressedQueryEngine {
         for (int i = 0; i < months.size(); i++) {
             String monthValue = months.get(i);
             String townValue = towns.get(i);
+            Double floorValue = Double.parseDouble(floor.get(i));
             
             // Simple string matching: month equals yearMonth OR month equals nextMonthStr
             if ((monthValue.equals(yearMonth) || monthValue.equals(nextMonthStr)) && 
-                townValue.equals(town)) {
+                townValue.equals(town) &&
+                floorValue >= 80) {
                 matchingIndices.add(i);
             }
         }
@@ -71,13 +74,14 @@ public class CompressedQueryEngine {
         }
         
         System.out.println("Filtering transactions with month = " + yearMonth + " OR month = " + nextMonthStr + " for town: " + town);
-        
+
         try {
             // Check if we can use the optimized path with compressed dictionaries
             Map<String, Integer> monthDict = loadDictionary("month");
             Map<String, Integer> townDict = loadDictionary("town");
+            Map<String, Integer> floor_area_sqmDict = loadDictionary("floor_area_sqm");
             
-            if (monthDict != null && townDict != null) {
+            if (monthDict != null && townDict != null && floor_area_sqmDict != null) {
                 // Get the indices for our target values
                 Integer monthIndex1 = monthDict.get(yearMonth);
                 Integer monthIndex2 = monthDict.get(nextMonthStr);
@@ -92,27 +96,36 @@ public class CompressedQueryEngine {
                 // Get compressed data
                 byte[] monthData = loadCompressedData("month");
                 byte[] townData = loadCompressedData("town");
+                byte[] floor_area_sqmData = loadCompressedData("floor_area_sqm");
                 
                 if (monthData != null && townData != null) {
                     int recordCount = getRecordCount();
                     int monthBits = getBitsPerValue("month");
                     int townBits = getBitsPerValue("town");
+                    int floor_area_sqmBits = getBitsPerValue("floor_area_sqm");
                     
                     // Process each record without fully decompressing
                     BitStreamReader monthReader = new BitStreamReader(monthData, monthBits);
                     BitStreamReader townReader = new BitStreamReader(townData, townBits);
+                    BitStreamReader floor_area_sqmReader = new BitStreamReader(floor_area_sqmData, floor_area_sqmBits);
                     
                     // Skip metadata in both readers
                     monthReader.skipMetadata();
                     townReader.skipMetadata();
+                    floor_area_sqmReader.skipMetadata();
+                    Map<Integer, String> reversedMap = reverseMap(floor_area_sqmDict);
                     
                     for (int i = 0; i < recordCount; i++) {
                         int monthValue = monthReader.readBits();
                         int townValue = townReader.readBits();
+                        int floor_area_sqmTemp = floor_area_sqmReader.readBits();
                         
                         if ((monthValue == monthIndex1 || monthValue == monthIndex2) && 
                             townValue == townIndex) {
-                            matchingIndices.add(i);
+                            double floor_area_sqmValue = Double.parseDouble(reversedMap.get(floor_area_sqmTemp));
+                            if (floor_area_sqmValue >= 80) {
+                                matchingIndices.add(i);
+                            }
                         }
                     }
                     
@@ -251,6 +264,16 @@ public class CompressedQueryEngine {
             return result;
         }
     }
+
+    public static Map<Integer, String> reverseMap(Map<String, Integer> originalMap) {
+        Map<Integer, String> reversedMap = new HashMap<>();
+        
+        for (Map.Entry<String, Integer> entry : originalMap.entrySet()) {
+            reversedMap.put(entry.getValue(), entry.getKey());
+        }
+        
+        return reversedMap;
+    }
     
     /**
      * Query 1: Get minimum resale price for a specific month and town
@@ -260,16 +283,31 @@ public class CompressedQueryEngine {
         if (subset.isEmpty()) {
             return 0.0;
         }
+
+        Map<String, Integer> resale_priceDict = loadDictionary("resale_price");
+        Map<Integer, String> reversedMap = reverseMap(resale_priceDict);
+
+        byte[] resale_priceData = loadCompressedData("resale_price");
+        int recordCount = getRecordCount();
+        int resale_priceBits = getBitsPerValue("resale_price");
+        BitStreamReader resale_priceReader = new BitStreamReader(resale_priceData, resale_priceBits);
         
-        List<String> prices = columnStore.getColumnData("resale_price");
-        
-        double minPrice = Double.MAX_VALUE;
-        for (int index : subset) {
-            double price = Double.parseDouble(prices.get(index));
-            minPrice = Math.min(minPrice, price);
+        resale_priceReader.skipMetadata();
+        Integer minPrice = Integer.MAX_VALUE;
+        for (int i=0 ; i<recordCount ; i++) {
+            int resale_priceIndex = resale_priceReader.readBits();
+            if (subset.contains(i)) {
+                minPrice = Math.min(minPrice, resale_priceIndex);
+            }
         }
-        
-        return minPrice;
+        return Double.parseDouble(reversedMap.get(minPrice));
+
+        // List<String> prices = columnStore.getDecompressedColumnData("resale_price");
+        // Double minPrice = Double.MAX_VALUE;
+        // for (int i : subset) {
+        //     minPrice = Math.min(minPrice, Double.parseDouble(prices.get(i)));
+        // }
+        // return minPrice;
     }
     
     /**
@@ -281,19 +319,30 @@ public class CompressedQueryEngine {
             return 0.0;
         }
         
-        List<String> prices = columnStore.getColumnData("resale_price");
+        Map<String, Integer> resale_priceDict = loadDictionary("resale_price");
+        Map<Integer, String> reversedMap = reverseMap(resale_priceDict);
+
+        byte[] resale_priceData = loadCompressedData("resale_price");
+        int recordCount = getRecordCount();
+        int resale_priceBits = getBitsPerValue("resale_price");
+        BitStreamReader resale_priceReader = new BitStreamReader(resale_priceData, resale_priceBits);
         
-        // Calculate mean first
+        resale_priceReader.skipMetadata();
+
+        List<Double> prices_list = new ArrayList<>();
         double sum = 0.0;
-        for (int index : subset) {
-            sum += Double.parseDouble(prices.get(index));
+        double variance = 0.0;
+        for (int i = 0; i < recordCount; i++) {
+            int resale_priceIndex = resale_priceReader.readBits();
+            if (subset.contains(i)) {
+                double resalePrice = Double.parseDouble(reversedMap.get(resale_priceIndex));
+                sum += resalePrice; // To calculate mean
+                prices_list.add(resalePrice);
+            }
         }
         double mean = sum / subset.size();
         
-        // Calculate variance
-        double variance = 0.0;
-        for (int index : subset) {
-            double price = Double.parseDouble(prices.get(index));
+        for (double price:prices_list) {
             variance += Math.pow(price - mean, 2);
         }
         variance /= (subset.size()-1);
@@ -310,15 +359,26 @@ public class CompressedQueryEngine {
         if (subset.isEmpty()) {
             return 0.0;
         }
+
+        Map<String, Integer> resale_priceDict = loadDictionary("resale_price");
+        Map<Integer, String> reversedMap = reverseMap(resale_priceDict);
+
+        byte[] resale_priceData = loadCompressedData("resale_price");
+        int recordCount = getRecordCount();
+        int resale_priceBits = getBitsPerValue("resale_price");
+        BitStreamReader resale_priceReader = new BitStreamReader(resale_priceData, resale_priceBits);
         
-        List<String> prices = columnStore.getColumnData("resale_price");
-        
+        resale_priceReader.skipMetadata();
+                
         double sum = 0.0;
-        for (int index : subset) {
-            sum += Double.parseDouble(prices.get(index));
+        for (int i = 0; i < recordCount; i++) {
+            int resale_priceIndex = resale_priceReader.readBits();
+            if (subset.contains(i)) {
+                double resalePrice = Double.parseDouble(reversedMap.get(resale_priceIndex));
+                sum += resalePrice; // To calculate mean
+            }
         }
-        
-        return sum / subset.size();
+        return sum / subset.size();        
     }
     
     /**
@@ -329,9 +389,11 @@ public class CompressedQueryEngine {
         if (subset.isEmpty()) {
             return 0.0;
         }
-        
-        List<String> prices = columnStore.getColumnData("resale_price");
-        List<String> areas = columnStore.getColumnData("floor_area_sqm");
+
+        List<String> prices = columnStore.getDecompressedColumnData("resale_price");
+        List<String> areas = columnStore.getDecompressedColumnData("floor_area_sqm");
+        // List<String> prices = columnStore.getColumnData("resale_price");
+        // List<String> areas = columnStore.getColumnData("floor_area_sqm");
         
         double minPricePerSqm = Double.MAX_VALUE;
         for (int index : subset) {
