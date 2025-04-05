@@ -284,30 +284,12 @@ public class CompressedQueryEngine {
             return 0.0;
         }
 
-        Map<String, Integer> resale_priceDict = loadDictionary("resale_price");
-        Map<Integer, String> reversedMap = reverseMap(resale_priceDict);
-
-        byte[] resale_priceData = loadCompressedData("resale_price");
-        int recordCount = getRecordCount();
-        int resale_priceBits = getBitsPerValue("resale_price");
-        BitStreamReader resale_priceReader = new BitStreamReader(resale_priceData, resale_priceBits);
-        
-        resale_priceReader.skipMetadata();
-        Integer minPrice = Integer.MAX_VALUE;
-        for (int i=0 ; i<recordCount ; i++) {
-            int resale_priceIndex = resale_priceReader.readBits();
-            if (subset.contains(i)) {
-                minPrice = Math.min(minPrice, resale_priceIndex);
-            }
+        List<String> prices = columnStore.getDecompressedColumnData("resale_price");
+        Double minPrice = Double.MAX_VALUE;
+        for (int i : subset) {
+            minPrice = Math.min(minPrice, Double.parseDouble(prices.get(i)));
         }
-        return Double.parseDouble(reversedMap.get(minPrice));
-
-        // List<String> prices = columnStore.getDecompressedColumnData("resale_price");
-        // Double minPrice = Double.MAX_VALUE;
-        // for (int i : subset) {
-        //     minPrice = Math.min(minPrice, Double.parseDouble(prices.get(i)));
-        // }
-        // return minPrice;
+        return minPrice;
     }
     
     /**
@@ -318,32 +300,18 @@ public class CompressedQueryEngine {
         if (subset.isEmpty()) {
             return 0.0;
         }
-        
-        Map<String, Integer> resale_priceDict = loadDictionary("resale_price");
-        Map<Integer, String> reversedMap = reverseMap(resale_priceDict);
-
-        byte[] resale_priceData = loadCompressedData("resale_price");
-        int recordCount = getRecordCount();
-        int resale_priceBits = getBitsPerValue("resale_price");
-        BitStreamReader resale_priceReader = new BitStreamReader(resale_priceData, resale_priceBits);
-        
-        resale_priceReader.skipMetadata();
-
-        List<Double> prices_list = new ArrayList<>();
+        List<String> prices = columnStore.getDecompressedColumnData("resale_price");
+                
         double sum = 0.0;
         double variance = 0.0;
-        for (int i = 0; i < recordCount; i++) {
-            int resale_priceIndex = resale_priceReader.readBits();
-            if (subset.contains(i)) {
-                double resalePrice = Double.parseDouble(reversedMap.get(resale_priceIndex));
-                sum += resalePrice; // To calculate mean
-                prices_list.add(resalePrice);
-            }
+
+        for (int i : subset) {
+            sum += Double.parseDouble(prices.get(i)); // To calculate mean
         }
         double mean = sum / subset.size();
-        
-        for (double price:prices_list) {
-            variance += Math.pow(price - mean, 2);
+
+        for (int i : subset) {
+            variance += Math.pow(Double.parseDouble(prices.get(i)) - mean, 2);
         }
         variance /= (subset.size()-1);
         
@@ -360,23 +328,11 @@ public class CompressedQueryEngine {
             return 0.0;
         }
 
-        Map<String, Integer> resale_priceDict = loadDictionary("resale_price");
-        Map<Integer, String> reversedMap = reverseMap(resale_priceDict);
-
-        byte[] resale_priceData = loadCompressedData("resale_price");
-        int recordCount = getRecordCount();
-        int resale_priceBits = getBitsPerValue("resale_price");
-        BitStreamReader resale_priceReader = new BitStreamReader(resale_priceData, resale_priceBits);
-        
-        resale_priceReader.skipMetadata();
+        List<String> prices = columnStore.getDecompressedColumnData("resale_price");
                 
         double sum = 0.0;
-        for (int i = 0; i < recordCount; i++) {
-            int resale_priceIndex = resale_priceReader.readBits();
-            if (subset.contains(i)) {
-                double resalePrice = Double.parseDouble(reversedMap.get(resale_priceIndex));
-                sum += resalePrice; // To calculate mean
-            }
+        for (int i : subset) {
+            sum += Double.parseDouble(prices.get(i)); // To calculate mean
         }
         return sum / subset.size();        
     }
@@ -392,8 +348,6 @@ public class CompressedQueryEngine {
 
         List<String> prices = columnStore.getDecompressedColumnData("resale_price");
         List<String> areas = columnStore.getDecompressedColumnData("floor_area_sqm");
-        // List<String> prices = columnStore.getColumnData("resale_price");
-        // List<String> areas = columnStore.getColumnData("floor_area_sqm");
         
         double minPricePerSqm = Double.MAX_VALUE;
         for (int index : subset) {
