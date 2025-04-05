@@ -66,6 +66,21 @@ public class NormalColumnStore {
             }
         }
     }
+
+    public List<String> readColumn(String columnName) throws IOException {
+        List<String> columnValues = new ArrayList<>();
+        String columnFilePath = dataDirectory + File.separator + columnName + ".col";
+        
+        // Open the BufferedReader for the specific column file
+        try (BufferedReader reader = new BufferedReader(new FileReader(columnFilePath))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                columnValues.add(line);
+            }
+        }
+        
+        return columnValues;
+    }
     
     public List<String> getColumnData(String columnName) throws IOException {
         if (!columnNames.contains(columnName)) {

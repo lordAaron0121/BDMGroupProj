@@ -1,4 +1,9 @@
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileReader;
 import java.io.IOException;
+import java.io.ObjectInputStream;
 import java.util.*;
 
 public class NormalQueryEngine {
@@ -9,9 +14,13 @@ public class NormalQueryEngine {
     }
 
     public List<Integer> getSubsetByMonthAndTown(String yearMonth, String town) throws IOException {
-        List<String> months = columnStore.getColumnData("month");
-        List<String> towns = columnStore.getColumnData("town");
-        List<String> floor = columnStore.getColumnData("floor_area_sqm");
+        List<String> months = columnStore.readColumn("month");
+        List<String> towns = columnStore.readColumn("town");
+        List<String> floor_area_sqm = columnStore.readColumn("floor_area_sqm");
+
+        // List<String> months = columnStore.getColumnData("month");
+        // List<String> towns = columnStore.getColumnData("town");
+        // List<String> floor = columnStore.getColumnData("floor_area_sqm");
         List<Integer> matchingIndices = new ArrayList<>();
         
         // Calculate the next month for the range (manually, without using YearMonth)
@@ -38,7 +47,7 @@ public class NormalQueryEngine {
         for (int i = 0; i < months.size(); i++) {
             String monthValue = months.get(i);
             String townValue = towns.get(i);
-            Double floorValue = Double.parseDouble(floor.get(i));
+            Double floorValue = Double.parseDouble(floor_area_sqm.get(i));
             
             // Simple string matching: month equals yearMonth OR month equals nextMonthStr
             if ((monthValue.equals(yearMonth) || monthValue.equals(nextMonthStr)) && 
@@ -61,7 +70,8 @@ public class NormalQueryEngine {
             return 0.0;
         }
         
-        List<String> prices = columnStore.getColumnData("resale_price");
+        List<String> prices = columnStore.readColumn("resale_price");
+        // List<String> prices = columnStore.getColumnData("resale_price");
         
         double minPrice = Double.MAX_VALUE;
         for (int index : subset) {
@@ -80,8 +90,9 @@ public class NormalQueryEngine {
         if (subset.isEmpty()) {
             return 0.0;
         }
-        
-        List<String> prices = columnStore.getColumnData("resale_price");
+
+        List<String> prices = columnStore.readColumn("resale_price");
+        // List<String> prices = columnStore.getColumnData("resale_price");
         
         // Calculate mean first
         double sum = 0.0;
@@ -111,7 +122,8 @@ public class NormalQueryEngine {
             return 0.0;
         }
         
-        List<String> prices = columnStore.getColumnData("resale_price");
+        List<String> prices = columnStore.readColumn("resale_price");
+        // List<String> prices = columnStore.getColumnData("resale_price");
         
         double sum = 0.0;
         for (int index : subset) {
@@ -130,8 +142,10 @@ public class NormalQueryEngine {
             return 0.0;
         }
         
-        List<String> prices = columnStore.getColumnData("resale_price");
-        List<String> areas = columnStore.getColumnData("floor_area_sqm");
+        List<String> prices = columnStore.readColumn("resale_price");
+        List<String> areas = columnStore.readColumn("floor_area_sqm");
+        // List<String> prices = columnStore.getColumnData("resale_price");
+        // List<String> areas = columnStore.getColumnData("floor_area_sqm");
         
         double minPricePerSqm = Double.MAX_VALUE;
         for (int index : subset) {
