@@ -1,7 +1,9 @@
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.util.*;
@@ -11,6 +13,33 @@ public class NormalQueryEngine {
     
     public NormalQueryEngine(NormalColumnStore columnStore) {
         this.columnStore = columnStore;
+    }
+
+        public static void saveToCSV(Map<String, Double> results, String year, String month, String town, String filePath) throws IOException {
+        // Create a FileWriter to write to the CSV file
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(filePath))) {
+            // Write the header row
+            writer.write("Year,Month,Town,Category,Value");
+            writer.newLine(); // Newline after the header row
+
+            List<String> categories = new ArrayList<>();
+            categories.add("Minimum Price");
+            categories.add("Standard Deviation of Price");
+            categories.add("Average Price");
+            categories.add("Minimum Price per Square Meter");
+
+            // Write the data rows
+            for (Map.Entry<String, Double> entry : results.entrySet()) {
+                String category = entry.getKey();
+                if (categories.contains(category)) {
+                    Double value = entry.getValue();
+                    
+                    // Write each row with year, month, town, category, and value
+                    writer.write(String.format("%s,%s,%s,%s,%.2f", year, month, town, category, value));
+                    writer.newLine(); // Newline after each entry
+                }
+            }
+        }
     }
 
     public List<Integer> getSubsetByMonthAndTown(String yearMonth, String town) throws IOException {
@@ -306,6 +335,8 @@ public class NormalQueryEngine {
         // Print total time taken for all queries
         System.out.println("Total Time for all queries: " + totalTime + "ms");
         
+        saveToCSV(results, yearMonth.split("-")[0], yearMonth.split("-")[1], town, "ScanResult_U21XXXXXA.csv");
+
         return resultsAndTimings;
     }
 }
