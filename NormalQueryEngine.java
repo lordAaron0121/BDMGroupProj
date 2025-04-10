@@ -18,9 +18,6 @@ public class NormalQueryEngine {
         List<String> towns = columnStore.readColumn("town");
         List<String> floor_area_sqm = columnStore.readColumn("floor_area_sqm");
 
-        // List<String> months = columnStore.getColumnData("month");
-        // List<String> towns = columnStore.getColumnData("town");
-        // List<String> floor = columnStore.getColumnData("floor_area_sqm");
         List<Integer> matchingIndices = new ArrayList<>();
         
         // Calculate the next month for the range (manually, without using YearMonth)
@@ -130,7 +127,7 @@ public class NormalQueryEngine {
             sum += Double.parseDouble(prices.get(index));
         }
         
-        return sum / (subset.size()-1);
+        return sum / subset.size();
     }
     
     /**
@@ -174,6 +171,79 @@ public class NormalQueryEngine {
         results.put("Standard Deviation of Price", getStandardDeviationPrice(yearMonth, town));
         results.put("Average Price", getAveragePrice(yearMonth, town));
         results.put("Minimum Price per Square Meter", getMinimumPricePerSquareMeter(yearMonth, town));
+        
+        return results;
+    }
+
+    public Double getMinimumPriceZoneMap(String yearMonth, String town) throws IOException {
+        Map<String, List<Integer>> relevantData = ZoneMetadata.getDataFromRelevantZones(yearMonth, town, columnStore.getDataDirectory());
+        List<Double> resalePrices = ZoneMetadata.readDoubleColumnDataInZones("resale_price", relevantData.get("zones"), relevantData.get("indices"), columnStore.getDataDirectory());
+
+        return Collections.min(resalePrices);
+    }
+
+    public double getStandardDeviationPriceZoneMap(String yearMonth, String town) throws IOException {
+        Map<String, List<Integer>> relevantData = ZoneMetadata.getDataFromRelevantZones(yearMonth, town, columnStore.getDataDirectory());
+        List<Double> resalePrices = ZoneMetadata.readDoubleColumnDataInZones("resale_price", relevantData.get("zones"), relevantData.get("indices"), columnStore.getDataDirectory());
+
+        double mean = resalePrices.stream()
+            .mapToDouble(Double::doubleValue)
+            .average()
+            .orElse(0.0); // fallback if list is empty
+        
+        // Calculate variance
+        double variance = 0.0;
+        for (double resalePrice : resalePrices) {
+            variance += Math.pow(resalePrice - mean, 2);
+        }
+        variance /= (resalePrices.size() - 1);
+        
+        // Return standard deviation (square root of variance)
+        return Math.sqrt(variance);
+    }
+
+    public double getAveragePriceZoneMap(String yearMonth, String town) throws IOException {
+        Map<String, List<Integer>> relevantData = ZoneMetadata.getDataFromRelevantZones(yearMonth, town, columnStore.getDataDirectory());
+        List<Double> resalePrices = ZoneMetadata.readDoubleColumnDataInZones("resale_price", relevantData.get("zones"), relevantData.get("indices"), columnStore.getDataDirectory());
+        
+        double mean = resalePrices.stream()
+            .mapToDouble(Double::doubleValue)
+            .average()
+            .orElse(0.0); // fallback if list is empty
+
+        return mean;
+    }
+
+    public double getMinimumPricePerSquareMeterZoneMap(String yearMonth, String town) throws IOException {
+        Map<String, List<Integer>> relevantData = ZoneMetadata.getDataFromRelevantZones(yearMonth, town, columnStore.getDataDirectory());
+        List<Double> resalePrices = ZoneMetadata.readDoubleColumnDataInZones("resale_price", relevantData.get("zones"), relevantData.get("indices"), columnStore.getDataDirectory());
+        List<Double> floorAreaSqm = ZoneMetadata.readDoubleColumnDataInZones("floor_area_sqm", relevantData.get("zones"), relevantData.get("indices"), columnStore.getDataDirectory());
+        
+        double minPricePerSqm = Double.MAX_VALUE;
+        for (int index = 0 ; index < resalePrices.size(); index++) {
+            double price = resalePrices.get(index);
+            double area = floorAreaSqm.get(index);
+            double pricePerSqm = price / area;
+            
+            minPricePerSqm = Math.min(minPricePerSqm, pricePerSqm);
+        }
+        
+        return minPricePerSqm;
+    }
+
+    public Map<String, Double> runAllQueriesZoneMap(String yearMonth, String town) throws IOException {
+        Map<String, Double> results = new HashMap<>();
+        
+        // Get subset size
+        int subsetSize = ZoneMetadata.getDataFromRelevantZones(yearMonth, town, columnStore.getDataDirectory()).get("indices").size();
+        System.out.println("Found " + subsetSize + " matching transactions");
+        results.put("Subset Size", (double) subsetSize);
+        
+        // Run all queries
+        results.put("Minimum Price", getMinimumPriceZoneMap(yearMonth, town));
+        results.put("Standard Deviation of Price", getStandardDeviationPriceZoneMap(yearMonth, town));
+        results.put("Average Price", getAveragePriceZoneMap(yearMonth, town));
+        results.put("Minimum Price per Square Meter", getMinimumPricePerSquareMeterZoneMap(yearMonth, town));
         
         return results;
     }

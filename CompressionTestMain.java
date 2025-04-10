@@ -88,6 +88,13 @@ public class CompressionTestMain {
             Map<String, Double> normalResults = normalQueryEngine.runAllQueries(yearMonth, town);
             long normalQueryEndTime = System.nanoTime();
             long normalQueryTime = normalQueryEndTime - normalQueryStartTime;
+
+            // Run normal queries with Zone maps and measure time
+            System.out.println("\nRunning queries on normal column store with Zone Map...");
+            long normalQueryZoneMapStartTime = System.nanoTime();
+            Map<String, Double> normalZoneMapResults = normalQueryEngine.runAllQueriesZoneMap(yearMonth, town);
+            long normalQueryZoneMapEndTime = System.nanoTime();
+            long normalQueryZoneMapTime = normalQueryZoneMapEndTime - normalQueryZoneMapStartTime;
             
             // Run compressed queries and measure time
             System.out.println("\nRunning queries on compressed column store...");
@@ -99,6 +106,7 @@ public class CompressionTestMain {
             // Time comparison
             System.out.println("\n--- QUERY TIME COMPARISON ---");
             System.out.println("Normal column store query time: " + formatTime(normalQueryTime));
+            System.out.println("Normal column store with Zone Map query time: " + formatTime(normalQueryZoneMapTime));
             System.out.println("Compressed column store query time: " + formatTime(compressedQueryTime));
             
             double timeRatioPercent = 100.0 * compressedQueryTime / normalQueryTime;
@@ -120,6 +128,9 @@ public class CompressionTestMain {
             
             System.out.println("\nNormal Column Store Results:");
             printQueryResults(normalResults);
+
+            System.out.println("\nNormal Column Store With ZoneMap Results:");
+            printQueryResults(normalZoneMapResults);
             
             System.out.println("\nCompressed Column Store Results:");
             printQueryResults(compressedResults);

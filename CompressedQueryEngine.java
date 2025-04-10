@@ -1,4 +1,5 @@
 import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.util.*;
 
 public class CompressedQueryEngine {
@@ -99,16 +100,16 @@ public class CompressedQueryEngine {
                 byte[] floor_area_sqmData = loadCompressedData("floor_area_sqm");
                 
                 if (monthData != null && townData != null) {
-                    int recordCount = getRecordCount();
-                    int monthBits = getBitsPerValue("month");
-                    int townBits = getBitsPerValue("town");
-                    int floor_area_sqmBits = getBitsPerValue("floor_area_sqm");
-                    
+                    int recordCount = monthDict.get("# Number of records");
+                    int monthBits = monthDict.get("# Bits used per value");
+                    int townBits = townDict.get("# Bits used per value");
+                    int floor_area_sqmBits = floor_area_sqmDict.get("# Bits used per value");
+
                     // Process each record without fully decompressing
                     BitStreamReader monthReader = new BitStreamReader(monthData, monthBits);
                     BitStreamReader townReader = new BitStreamReader(townData, townBits);
                     BitStreamReader floor_area_sqmReader = new BitStreamReader(floor_area_sqmData, floor_area_sqmBits);
-                    
+
                     // Skip metadata in both readers
                     monthReader.skipMetadata();
                     townReader.skipMetadata();
@@ -128,7 +129,7 @@ public class CompressedQueryEngine {
                             }
                         }
                     }
-                    
+
                     System.out.println("Found " + matchingIndices.size() + " matching transactions (optimized)");
                     return matchingIndices;
                 }
@@ -158,7 +159,15 @@ public class CompressedQueryEngine {
             try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.FileReader(dictionaryPath))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
-                    if (line.startsWith("#")) continue;  // Skip comments
+                    if (line.startsWith("#")) {
+                        if (line.startsWith("# Bits used per value:")) {
+                            dictionary.put("# Bits used per value", Integer.parseInt(line.split(":")[1].trim()));
+                        }
+                        else if (line.startsWith("# Number of records:")) {
+                            dictionary.put("# Number of records", Integer.parseInt(line.split(":")[1].trim()));
+                        }
+                    continue;
+                    }
                     
                     String[] parts = line.split(",");
                     if (parts.length >= 2) {
@@ -173,28 +182,38 @@ public class CompressedQueryEngine {
         }
     }
     
-    /**
-     * Helper method to get the bits per value for a column
-     */
-    private int getBitsPerValue(String columnName) {
+    public List<String> readAndUncompressData(String columnName) throws IOException {
         try {
-            String dictionaryPath = columnStore.getDataDirectory() + java.io.File.separator + columnName + ".dict";
+            // Check if we can use the optimized path with compressed dictionaries
+            Map<String, Integer> columnDict = loadDictionary(columnName);
+                
+            // Get compressed data
+            byte[] columnData = loadCompressedData(columnName);
             
-            try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.FileReader(dictionaryPath))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    if (line.startsWith("# Bits used per value:")) {
-                        return Integer.parseInt(line.split(":")[1].trim());
-                    }
-                }
+            int recordCount = columnDict.get("# Number of records");
+            int columnBits = columnDict.get("# Bits used per value");
+
+            // Process each record without fully decompressing
+            BitStreamReader columnReader = new BitStreamReader(columnData, columnBits);
+
+            // Skip metadata in both readers
+            columnReader.skipMetadata();
+            Map<Integer, String> reversedMap = reverseMap(columnDict);
+            
+            List<String> result = new ArrayList<>();
+            for (int i = 0; i < recordCount; i++) {
+                int compressedValue = columnReader.readBits();
+                result.add(reversedMap.get(compressedValue));
             }
+            return result;
+
         } catch (Exception e) {
-            // Ignore
+            System.err.println("Uncompression failed " + e.getMessage());
+            return new ArrayList<>();
         }
         
-        return -1;  // Not found
     }
-    
+
     /**
      * Helper method to load compressed data
      */
@@ -205,14 +224,6 @@ public class CompressedQueryEngine {
         } catch (Exception e) {
             return null;
         }
-    }
-    
-    /**
-     * Helper method to get record count from compressed file
-     */
-    private int getRecordCount() throws IOException {
-        // Just use the first column to determine record count
-        return columnStore.getColumnData(columnStore.getColumnNames().get(0)).size();
     }
     
     /**
@@ -283,8 +294,7 @@ public class CompressedQueryEngine {
         if (subset.isEmpty()) {
             return 0.0;
         }
-
-        List<String> prices = columnStore.getDecompressedColumnData("resale_price");
+        List<String> prices = readAndUncompressData("resale_price");
         Double minPrice = Double.MAX_VALUE;
         for (int i : subset) {
             minPrice = Math.min(minPrice, Double.parseDouble(prices.get(i)));
@@ -300,7 +310,7 @@ public class CompressedQueryEngine {
         if (subset.isEmpty()) {
             return 0.0;
         }
-        List<String> prices = columnStore.getDecompressedColumnData("resale_price");
+        List<String> prices = readAndUncompressData("resale_price");
                 
         double sum = 0.0;
         double variance = 0.0;
@@ -328,7 +338,7 @@ public class CompressedQueryEngine {
             return 0.0;
         }
 
-        List<String> prices = columnStore.getDecompressedColumnData("resale_price");
+        List<String> prices = readAndUncompressData("resale_price");
                 
         double sum = 0.0;
         for (int i : subset) {
@@ -346,8 +356,8 @@ public class CompressedQueryEngine {
             return 0.0;
         }
 
-        List<String> prices = columnStore.getDecompressedColumnData("resale_price");
-        List<String> areas = columnStore.getDecompressedColumnData("floor_area_sqm");
+        List<String> prices = readAndUncompressData("resale_price");
+        List<String> areas = readAndUncompressData("floor_area_sqm");
         
         double minPricePerSqm = Double.MAX_VALUE;
         for (int index : subset) {
