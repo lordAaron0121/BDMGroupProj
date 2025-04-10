@@ -82,26 +82,23 @@ public class PerformanceTest {
 
     private static void loadDataIntoStores(ColumnStore store, FileColumnStore fileStore, 
                                          SplitRowStore splitStore, ZoneMapStore zoneStore) {
-        // Get all columns
-        List<Object> months = store.getColumn("month");
-        List<Object> towns = store.getColumn("town");
-        List<Object> areas = store.getColumn("floor_area_sqm");
-        List<Object> prices = store.getColumn("resale_price");
+        for (String key : store.getColumnNames()) {
+            // Retrieve the column for the current key using store.getColumn(key)
+            List<Object> columnData = store.getColumn(key);
+
+            // Save the column data in fileStore
+            fileStore.saveColumn(key, columnData);
+        }
         
-        // Load into FileColumnStore
-        fileStore.saveColumn("month", months);
-        fileStore.saveColumn("town", towns);
-        fileStore.saveColumn("floor_area_sqm", areas);
-        fileStore.saveColumn("resale_price", prices);
-        
-        // Create row data
+        String firstColumn = store.getColumnNames().iterator().next(); // Get the first column name
+
+        // Load into RowStore
         List<Map<String, Object>> rows = new ArrayList<>();
-        for (int i = 0; i < months.size(); i++) {
+        for (int i = 0; i < store.getColumn(firstColumn).size(); i++) {
             Map<String, Object> row = new HashMap<>();
-            row.put("month", months.get(i));
-            row.put("town", towns.get(i));
-            row.put("floor_area_sqm", areas.get(i));
-            row.put("resale_price", prices.get(i));
+            for (String key : store.getColumnNames()) {
+                row.put(key, store.getColumn(key).get(i));
+            }
             rows.add(row);
         }
 
@@ -118,8 +115,8 @@ public class PerformanceTest {
         // Define conditions for sequential filtering
         List<String> columnNames = Arrays.asList("month", "town", "floor_area_sqm");
         List<Predicate<Object>> conditions = Arrays.asList(
-            month -> month.equals("2021-03") || month.equals("2021-04"),
-            town -> town.equals("JURONG WEST"),
+            month -> month.equals("2016-04") || month.equals("2016-05"),
+            town -> town.equals("CHOA CHU KANG"),
             area -> Double.parseDouble((String) area) >= 80
         );
         
@@ -145,7 +142,7 @@ public class PerformanceTest {
         long startTime = System.nanoTime();
         
         List<ZoneMapStore.Record> results = store.filter(
-            "2021-03", "2021-04", "JURONG WEST", 80.0
+            "2016-04", "2016-05", "CHOA CHU KANG", 80.0
         );
         
         long totalTime = (System.nanoTime() - startTime) / 1_000_000;
@@ -157,8 +154,8 @@ public class PerformanceTest {
         
         // Define conditions for filtering
         Map<String, Predicate<Object>> conditions = new HashMap<>();
-        conditions.put("month", month -> month.equals("2021-03") || month.equals("2021-04"));
-        conditions.put("town", town -> town.equals("JURONG WEST"));
+        conditions.put("month", month -> month.equals("2016-04") || month.equals("2016-05"));
+        conditions.put("town", town -> town.equals("CHOA CHU KANG"));
         conditions.put("floor_area_sqm", area -> Double.parseDouble((String) area) >= 80);
         
         // Filter rows that match all conditions

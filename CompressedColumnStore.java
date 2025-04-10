@@ -148,7 +148,8 @@ public class CompressedColumnStore {
         int bitsNeeded = (int) Math.ceil(Math.log(uniqueCount) / Math.log(2));
         
         // Create dictionary and save it
-        Map<String, Integer> dictionary = createAndSaveDictionary(columnName, uniqueValues, bitsNeeded);
+        Integer recordSize = columnData.size();
+        Map<String, Integer> dictionary = createAndSaveDictionary(columnName, uniqueValues, bitsNeeded, recordSize);
         
         // Convert and save column data in compressed format
         writeCompressedColumnData(columnName, columnData, dictionary, bitsNeeded);
@@ -157,7 +158,7 @@ public class CompressedColumnStore {
     /**
      * Create dictionary mapping values to indices and save it to file
      */
-    private Map<String, Integer> createAndSaveDictionary(String columnName, Set<String> uniqueValues, int bitsNeeded) 
+    private Map<String, Integer> createAndSaveDictionary(String columnName, Set<String> uniqueValues, int bitsNeeded, int recordSize) 
         throws IOException {
         // Create a sorted list of unique values
         List<String> sortedUniqueValues = new ArrayList<>(uniqueValues);
@@ -177,6 +178,8 @@ public class CompressedColumnStore {
             writer.write("# Format: value,index");
             writer.newLine();
             writer.write("# Bits used per value: " + bitsNeeded);
+            writer.newLine();
+            writer.write("# Number of records: " + recordSize);
             writer.newLine();
             
             for (Map.Entry<String, Integer> entry : dictionary.entrySet()) {
@@ -277,7 +280,7 @@ public class CompressedColumnStore {
         }
     }
     
-    private List<String> getDecompressedColumnData(String columnName) throws IOException {
+    public List<String> getDecompressedColumnData(String columnName) throws IOException {
         // Load dictionary and get bits per value
         Map<Integer, String> reverseDictionary = new HashMap<>();
         int bitsPerValue = loadDictionary(columnName, reverseDictionary);

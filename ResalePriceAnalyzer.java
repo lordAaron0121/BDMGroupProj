@@ -10,14 +10,14 @@ public class ResalePriceAnalyzer {
         ColumnStore store = CSVLoader.loadCSV(relativePath);
 
         // Progressive filtering approach
-        // 1. First filter by month (March and April 2021)
+        // 1. First filter by month (April and May 2016)
         List<Integer> monthFilteredIndices = new ArrayList<>();
         List<Object> months = store.getColumn("month");
         
         // First pass: Filter by month
         for (int i = 0; i < months.size(); i++) {
             String month = (String) months.get(i);
-            if (month.equals("2021-03") || month.equals("2021-04")) {
+            if (month.equals("2016-04") || month.equals("2016-05")) {
                 monthFilteredIndices.add(i);
             }
         }
@@ -29,7 +29,7 @@ public class ResalePriceAnalyzer {
 
         for (int index : monthFilteredIndices) {
             try {
-                if (towns.get(index).equals("JURONG WEST") &&
+                if (towns.get(index).equals("CHOA CHU KANG") &&
                     Double.parseDouble((String) floorAreas.get(index)) >= 80) {
                     finalFilteredIndices.add(index);
                 }

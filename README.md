@@ -82,8 +82,8 @@ Zones are pruned based on three criteria:
 
 ### Query: Filter by Month, Town, and Area
 Filtering criteria:
-- Months: "2021-03" OR "2021-04"
-- Town: "JURONG WEST"
+- Months: "2016-04" OR "2016-05"
+- Town: "CHOA CHU KANG"
 - Minimum Area: 80.0 sqm
 
 Performance metrics (average execution time):
