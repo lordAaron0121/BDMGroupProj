@@ -335,7 +335,7 @@ public class NormalQueryEngine {
         // Print total time taken for all queries
         System.out.println("Total Time for all queries: " + totalTime + "ms");
         
-        saveToCSV(results, yearMonth.split("-")[0], yearMonth.split("-")[1], town, "ScanResult_U21XXXXXA.csv");
+        saveToCSV(results, yearMonth.split("-")[0], yearMonth.split("-")[1], town, "ScanResult_U2121346H.csv");
 
         return resultsAndTimings;
     }
