@@ -12,6 +12,9 @@ public class PerformanceTest {
     public static void main(String[] args) throws IOException {
         // Load data
         String filePath = "../data/ResalePricesSingapore.csv";
+        if (args.length > 0) {
+            filePath = args[0];
+        }
         ColumnStore store = CSVLoader.loadCSV(filePath);
         
         // Initialize our storage implementations
@@ -150,27 +153,63 @@ public class PerformanceTest {
     }
     
     private static TestResult runSplitRowStoreApproach(SplitRowStore store) {
-        long startTime = System.nanoTime();
-        
         // Define conditions for filtering
         Map<String, Predicate<Object>> conditions = new HashMap<>();
         conditions.put("month", month -> month.equals("2016-04") || month.equals("2016-05"));
         conditions.put("town", town -> town.equals("CHOA CHU KANG"));
         conditions.put("floor_area_sqm", area -> Double.parseDouble((String) area) >= 80);
         
-        // Filter rows that match all conditions
+        // Minimum Price Query
+        long startTime = System.nanoTime();
         List<Map<String, Object>> filteredRows = store.filter(conditions);
-        
-        // Extract prices and areas for analysis
-        List<Object> filteredPrices = new ArrayList<>();
-        List<Object> filteredAreas = new ArrayList<>();
+        double minPrice = Double.MAX_VALUE;
         for (Map<String, Object> row : filteredRows) {
-            filteredPrices.add(row.get("resale_price"));
-            filteredAreas.add(row.get("floor_area_sqm"));
+            minPrice = Math.min(minPrice, Double.parseDouble((String)row.get("resale_price")));
         }
+        long minPriceTime = (System.nanoTime() - startTime) / 1_000_000;
+        System.out.println("Row Store - Minimum Price Query Time: " + minPriceTime + " ms");
         
-        long totalTime = (System.nanoTime() - startTime) / 1_000_000;
-        return new TestResult(totalTime, filteredRows.size());
+        // Standard Deviation Query
+        startTime = System.nanoTime();
+        filteredRows = store.filter(conditions);
+        double sum = 0.0;
+        for (Map<String, Object> row : filteredRows) {
+            sum += Double.parseDouble((String)row.get("resale_price"));
+        }
+        double mean = sum / filteredRows.size();
+        double variance = 0.0;
+        for (Map<String, Object> row : filteredRows) {
+            double price = Double.parseDouble((String)row.get("resale_price"));
+            variance += Math.pow(price - mean, 2);
+        }
+        double stdDev = Math.sqrt(variance / (filteredRows.size() - 1));
+        long stdDevTime = (System.nanoTime() - startTime) / 1_000_000;
+        System.out.println("Row Store - Standard Deviation Query Time: " + stdDevTime + " ms");
+        
+        // Average Price Query
+        startTime = System.nanoTime();
+        filteredRows = store.filter(conditions);
+        sum = 0.0;
+        for (Map<String, Object> row : filteredRows) {
+            sum += Double.parseDouble((String)row.get("resale_price"));
+        }
+        double avgPrice = sum / filteredRows.size();
+        long avgPriceTime = (System.nanoTime() - startTime) / 1_000_000;
+        System.out.println("Row Store - Average Price Query Time: " + avgPriceTime + " ms");
+        
+        // Price per Square Meter Query
+        startTime = System.nanoTime();
+        filteredRows = store.filter(conditions);
+        double minPricePerSqm = Double.MAX_VALUE;
+        for (Map<String, Object> row : filteredRows) {
+            double price = Double.parseDouble((String)row.get("resale_price"));
+            double area = Double.parseDouble((String)row.get("floor_area_sqm"));
+            minPricePerSqm = Math.min(minPricePerSqm, price / area);
+        }
+        long pricePerSqmTime = (System.nanoTime() - startTime) / 1_000_000;
+        System.out.println("Row Store - Price per Square Meter Query Time: " + pricePerSqmTime + " ms");
+        
+        return new TestResult(minPriceTime + stdDevTime + avgPriceTime + pricePerSqmTime, filteredRows.size());
     }
     
     private static void printDetailedResults(long[] splitStoreTimes, long[] fileStoreTimes, 
