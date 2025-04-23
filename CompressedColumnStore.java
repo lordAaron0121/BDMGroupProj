@@ -1,6 +1,7 @@
 import java.io.*;
 import java.nio.file.*;
 import java.util.*;
+import java.nio.ByteBuffer;
 
 public class CompressedColumnStore {
     private String dataDirectory;
@@ -232,6 +233,114 @@ public class CompressedColumnStore {
             }
         }
     }
+
+    public void generateZoneMapsFromCompressedColumns(int chunkSize) throws IOException {
+        Map<String, List<ZoneMetadata>> columnZoneMaps = new HashMap<>();
+
+        Path columnDir = Paths.get(dataDirectory);
+    
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(columnDir, "*.cmp")) {
+            for (Path dataFile : stream) {
+                String columnName = dataFile.getFileName().toString().replace(".cmp", "");
+    
+                List<ZoneMetadata> zoneMetadataList = new ArrayList<>();
+
+                byte[] tempCompressedData = loadCompressedData(columnName);
+
+                ByteBuffer buffer = ByteBuffer.wrap(tempCompressedData);
+    
+                int valuesPerBit = buffer.getInt();   // Reads first 4 bytes
+                int recordSize   = buffer.getInt();   // Reads next 4 bytes
+
+                List<Integer> compressedData = readCompressedData(Arrays.copyOfRange(tempCompressedData, 8, tempCompressedData.length), valuesPerBit, recordSize);
+
+                int zoneSize = 800;
+                long byteStart = 8; // first 8 bytes is for bitsPerValue and recordSize
+
+                for (int i = 0; i<compressedData.size(); i+=zoneSize) {
+                    int endIndex = Math.min(i + zoneSize, compressedData.size());
+                    List<Integer> zone = compressedData.subList(i, endIndex);
+
+                    int min = zone.stream().min(Integer::compareTo).orElse(0);
+                    int max = zone.stream().max(Integer::compareTo).orElse(0);
+
+                    // if (columnName.equals("month") && i==800) {System.out.println(zone);}
+
+                    int valuesInZone = endIndex - i;
+                    long bitsInZone = (long) valuesInZone * valuesPerBit;
+                    long bytesInZone = (long) Math.ceil(bitsInZone / 8.0); // Round up bits to whole bytes
+
+                    long byteEnd = byteStart + bytesInZone;
+
+                    zoneMetadataList.add(new ZoneMetadata(min, max, byteStart, byteEnd));
+
+                    byteStart = byteEnd;
+                }
+    
+                columnZoneMaps.put(columnName, zoneMetadataList);
+            }
+        }
+    
+        saveColumnMetadata(columnZoneMaps);
+    }
+
+    public static List<Integer> readCompressedData(byte[] buffer, int bitsPerValue, int expectedCount) {
+        List<Integer> result = new ArrayList<>(expectedCount);
+        int bitLength = buffer.length * 8;
+    
+        int currentBit = 0;
+    
+        for (int i = 0; i < expectedCount; i++) {
+            if (currentBit + bitsPerValue > bitLength) break;
+    
+            int value = 0;
+            for (int bit = 0; bit < bitsPerValue; bit++) {
+                int bitIndex = currentBit + bit;
+                int byteIndex = bitIndex / 8;
+                int bitInByte = 7 - (bitIndex % 8); // Big-endian bit order
+    
+                boolean isSet = ((buffer[byteIndex] >> bitInByte) & 1) == 1;
+                if (isSet) {
+                    value |= (1 << (bitsPerValue - 1 - bit)); // Big-endian within value
+                }
+            }
+    
+            result.add(value);
+            currentBit += bitsPerValue;
+        }
+    
+        return result;
+    }
+    
+    
+
+    private void saveColumnMetadata(Map<String, List<ZoneMetadata>> columnMetadataMap) throws IOException {
+        for (Map.Entry<String, List<ZoneMetadata>> entry : columnMetadataMap.entrySet()) {
+            String columnName = entry.getKey();
+            Path metadataFile = Paths.get(dataDirectory, columnName + "_zone_map.txt");
+
+            try (BufferedWriter metadataWriter = Files.newBufferedWriter(metadataFile)) {
+                metadataWriter.write(Boolean.toString(true));
+                metadataWriter.newLine();
+                for (ZoneMetadata zone : entry.getValue()) {
+                    metadataWriter.write(zone.toString());
+                    metadataWriter.newLine();
+                }
+            }
+        }
+    }
+    
+    /**
+     * Helper method to load compressed data
+     */
+    private byte[] loadCompressedData(String columnName) {
+        try {
+            String compressedPath = dataDirectory + java.io.File.separator + columnName + ".cmp";
+            return java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(compressedPath));
+        } catch (Exception e) {
+            return null;
+        }
+    }
     
     /**
      * Load metadata from file when opening an existing compressed column store
@@ -286,7 +395,8 @@ public class CompressedColumnStore {
         int bitsPerValue = loadDictionary(columnName, reverseDictionary);
         
         // Now read and decompress the data
-        return readCompressedData(columnName, reverseDictionary, bitsPerValue);
+        List<String> compressedData = readAndUncompressCompressedData(columnName, reverseDictionary, bitsPerValue);
+        return compressedData;
     }
     
     /**
@@ -325,7 +435,7 @@ public class CompressedColumnStore {
     /**
      * Read compressed data and decompress it using the dictionary
      */
-    private List<String> readCompressedData(String columnName, Map<Integer, String> reverseDictionary, 
+    private List<String> readAndUncompressCompressedData(String columnName, Map<Integer, String> reverseDictionary, 
                                            int bitsPerValue) throws IOException {
         String compressedFilePath = dataDirectory + File.separator + columnName + ".cmp";
         List<String> result = new ArrayList<>();

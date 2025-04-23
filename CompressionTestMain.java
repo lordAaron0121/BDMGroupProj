@@ -52,6 +52,8 @@ public class CompressionTestMain {
             
             System.out.println("Normal column store created successfully!");
             System.out.println("Normal column store memory usage: " + formatMemorySize(normalMemoryUsed));
+
+            normalStore.generateZoneMapsFromColumns(800);
             
             // Compressed Column Store
             System.out.println("\nInitializing compressed column store...");
@@ -68,6 +70,8 @@ public class CompressionTestMain {
             
             System.out.println("Compressed column store created successfully!");
             System.out.println("Compressed column store memory usage: " + formatMemorySize(compressedMemoryUsed));
+
+            compressedStore.generateZoneMapsFromCompressedColumns(800);
             
             // Memory comparison
             double memoryReductionPercent = 100.0 * (normalMemoryUsed - compressedMemoryUsed) / normalMemoryUsed;
@@ -102,12 +106,20 @@ public class CompressionTestMain {
             Map<String, Object> compressedResults = compressedQueryEngine.runAllQueries(yearMonth, town);
             long compressedQueryEndTime = System.nanoTime();
             long compressedQueryTime = compressedQueryEndTime - compressedQueryStartTime;
-            
+
+            // Run compressed queries with Zone Map and measure time
+            System.out.println("\nRunning queries on compressed column store...");
+            long compressedQueryZoneMapStartTime = System.nanoTime();
+            Map<String, Object> compressedZoneMapResults = compressedQueryEngine.runAllQueriesZoneMap(yearMonth, town);
+            long compressedQueryZoneMapEndTime = System.nanoTime();
+            long compressedQueryZoneMapTime = compressedQueryZoneMapEndTime - compressedQueryZoneMapStartTime;
+
             // Time comparison
             System.out.println("\n--- QUERY TIME COMPARISON ---");
             System.out.println("Normal column store query time: " + formatTime(normalQueryTime));
             System.out.println("Normal column store with Zone Map query time: " + formatTime(normalQueryZoneMapTime));
             System.out.println("Compressed column store query time: " + formatTime(compressedQueryTime));
+            System.out.println("Compressed column store with Zone Map query time: " + formatTime(compressedQueryZoneMapTime));
             
             double timeRatioPercent = 100.0 * compressedQueryTime / normalQueryTime;
             System.out.println("Compressed/Normal time ratio: " + String.format("%.2f%%", timeRatioPercent));
@@ -134,6 +146,9 @@ public class CompressionTestMain {
             
             System.out.println("\nCompressed Column Store Results:");
             printQueryResults(compressedResults);
+
+            System.out.println("\nCompressed Column Store with ZoneMap Results:");
+            printQueryResults(compressedZoneMapResults);
             
         } catch (IOException e) {
             System.err.println("Error: " + e.getMessage());
