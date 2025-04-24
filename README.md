@@ -3,9 +3,11 @@
 This project implements and compares different data storage and query optimization approaches for analyzing Singapore's resale price data. We explore various techniques to optimise the performance of filtering operations on the dataset.
 
 ## Running the Program
-- To compare the different column storage solutions, run CompressionTestMain.java
-- \<MatricNum>.csv output file will be created upon running the file
-- (OPTIONAL) To verify that row storage indeed performs worse than the column storage solutions, run RowStoreTest.java
+- To compare the different column storage solutions, run 2 steps:
+  - javac *.java
+  - java CompressionTestMain.java
+- \<MatricNum>.csv output file, .col, .dict, zonemaps will be created upon running the above 2 commands
+- (OPTIONAL) To verify that row storage indeed performs worse than the column storage solutions, run: java RowStoreTest.java
 
 ## Query: Filter by Month, Town, and Area
 Filtering criteria:
