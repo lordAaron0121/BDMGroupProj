@@ -16,7 +16,7 @@ public class CompressedQueryEngine {
         List<String> floor = columnStore.getColumnData("floor_area_sqm");
         List<Integer> matchingIndices = new ArrayList<>();
 
-        String nextMonthStr = PerformanceTest.getNextMonthStr(yearMonth);
+        String nextMonthStr = CompressionTestMain.getNextMonthStr(yearMonth);
         
         System.out.println("Filtering transactions with month = " + yearMonth + " OR month = " + nextMonthStr + " for town: " + town);
         
@@ -45,7 +45,7 @@ public class CompressedQueryEngine {
     public List<Integer> getSubsetByMonthAndTownOptimized(String yearMonth, String town) throws IOException {
         List<Integer> matchingIndices = new ArrayList<>();
         
-        String nextMonthStr = PerformanceTest.getNextMonthStr(yearMonth);
+        String nextMonthStr = CompressionTestMain.getNextMonthStr(yearMonth);
         
         System.out.println("Filtering transactions with month = " + yearMonth + " OR month = " + nextMonthStr + " for town: " + town);
 
@@ -442,7 +442,7 @@ public class CompressedQueryEngine {
     }
 
     public Map<String, List<Integer>> getRelevantZonesIndices(String yearMonth, String town) throws IOException {
-        String nextMonthStr = PerformanceTest.getNextMonthStr(yearMonth);
+        String nextMonthStr = CompressionTestMain.getNextMonthStr(yearMonth);
 
         // Check if we can use the optimized path with compressed dictionaries
         Map<String, Integer> monthDict = loadDictionary("month");

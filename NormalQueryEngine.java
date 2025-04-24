@@ -57,7 +57,7 @@ public class NormalQueryEngine {
         List<Integer> matchingIndices = new ArrayList<>();
         
         // Simple calculation for next month
-        String nextMonthStr = PerformanceTest.getNextMonthStr(yearMonth);
+        String nextMonthStr = CompressionTestMain.getNextMonthStr(yearMonth);
         
         System.out.println("Filtering transactions with month = " + yearMonth + " OR month = " + nextMonthStr + " for town: " + town);
         

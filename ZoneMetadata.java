@@ -153,7 +153,7 @@ public class ZoneMetadata implements Serializable {
 
     public static Map<String, List<Integer>> getDataFromRelevantZones(String yearMonth, String town, String dataDirectory) throws IOException {        
         // Calculate the next month for the range (manually, without using YearMonth)
-        String nextMonthStr = PerformanceTest.getNextMonthStr(yearMonth);
+        String nextMonthStr = CompressionTestMain.getNextMonthStr(yearMonth);
 
         List<ZoneMetadata> yearMonthZones = readZoneMetadata("month", dataDirectory);
         Set<Integer> unionSet = new HashSet<>();
