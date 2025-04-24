@@ -55,23 +55,8 @@ public class NormalQueryEngine {
 
         List<Integer> matchingIndices = new ArrayList<>();
         
-        // Calculate the next month for the range (manually, without using YearMonth)
-        String[] parts = yearMonth.split("-");
-        String year = parts[0];
-        String month = parts[1];
-        
         // Simple calculation for next month
-        String nextMonthStr;
-        if (month.equals("12")) {
-            // If December, next month is January of next year
-            int nextYear = Integer.parseInt(year) + 1;
-            nextMonthStr = nextYear + "-01";
-        } else {
-            // Otherwise, just increment the month
-            int nextMonth = Integer.parseInt(month) + 1;
-            // Ensure two digits for month
-            nextMonthStr = year + "-" + (nextMonth < 10 ? "0" + nextMonth : String.valueOf(nextMonth));
-        }
+        String nextMonthStr = PerformanceTest.getNextMonthStr(yearMonth);
         
         System.out.println("Filtering transactions with month = " + yearMonth + " OR month = " + nextMonthStr + " for town: " + town);
         
