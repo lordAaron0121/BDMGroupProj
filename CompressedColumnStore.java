@@ -155,6 +155,17 @@ public class CompressedColumnStore {
         // Convert and save column data in compressed format
         writeCompressedColumnData(columnName, columnData, dictionary, bitsNeeded);
     }
+
+    public static boolean allValuesAreDoubles(Collection<String> values) {
+        for (String value : values) {
+            try {
+                Double.parseDouble(value);
+            } catch (NumberFormatException e) {
+                return false; // Found a value that's not a valid double
+            }
+        }
+        return true; // All values are valid doubles
+    }
     
     /**
      * Create dictionary mapping values to indices and save it to file
@@ -163,8 +174,12 @@ public class CompressedColumnStore {
         throws IOException {
         // Create a sorted list of unique values
         List<String> sortedUniqueValues = new ArrayList<>(uniqueValues);
-        Collections.sort(sortedUniqueValues);
-        
+        if (allValuesAreDoubles(uniqueValues)) {
+            Collections.sort(sortedUniqueValues, Comparator.comparingDouble(Double::parseDouble));
+        } else {
+            Collections.sort(sortedUniqueValues); // Fall back to default lexicographic sort
+        }
+                
         // Create dictionary: value -> index
         Map<String, Integer> dictionary = new HashMap<>();
         for (int i = 0; i < sortedUniqueValues.size(); i++) {

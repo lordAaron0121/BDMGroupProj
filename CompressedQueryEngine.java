@@ -37,6 +37,40 @@ public class CompressedQueryEngine {
         System.out.println("Found " + matchingIndices.size() + " matching transactions");
         return matchingIndices;
     }
+
+    public static Integer getFloorAreaSqmIndex(Map<String, Integer> floor_area_sqmDict) {
+        Integer floor_area_sqmIndex = -1;
+        if (floor_area_sqmDict.containsKey("80")) {
+            floor_area_sqmIndex = floor_area_sqmDict.get("80");
+        }
+        else {
+            double target = 80.0;
+        
+            // Sort the keys by their double value
+            List<String> sortedKeys = new ArrayList<>(floor_area_sqmDict.keySet());
+            sortedKeys.sort(Comparator.comparingDouble(key -> {
+                try {
+                    return Double.parseDouble(key);
+                } catch (NumberFormatException e) {
+                    return Double.MAX_VALUE; // Put non-numeric keys at the end
+                }
+            }));
+        
+            // Find the first key > 80
+            for (String key : sortedKeys) {
+                try {
+                    double keyVal = Double.parseDouble(key);
+                    if (keyVal > target) {
+                        floor_area_sqmIndex = floor_area_sqmDict.get(key);
+                        break;
+                    }
+                } catch (NumberFormatException e) {
+                    // Skip non-numeric keys
+                }
+            }
+        }
+        return floor_area_sqmIndex;
+    }
     
     /**
      * Optimized version to get subset when we know month and town are compressed.
@@ -60,11 +94,12 @@ public class CompressedQueryEngine {
                 Integer monthIndex1 = monthDict.get(yearMonth);
                 Integer monthIndex2 = monthDict.get(nextMonthStr);
                 Integer townIndex = townDict.get(town);
+                Integer floor_area_sqmIndex = getFloorAreaSqmIndex(floor_area_sqmDict);
                 
                 // If any value doesn't exist in the dictionary, we can't use this optimization
                 if ((monthIndex1 == null && monthIndex2 == null) || townIndex == null) {
-                    // Fallback to regular method
-                    return getSubsetByMonthAndTown(yearMonth, town);
+                    // Return empty List
+                    return matchingIndices;
                 }
                 
                 // Get compressed data
@@ -87,7 +122,6 @@ public class CompressedQueryEngine {
                     monthReader.skipMetadata();
                     townReader.skipMetadata();
                     floor_area_sqmReader.skipMetadata();
-                    Map<Integer, String> reversedMap = reverseMap(floor_area_sqmDict);
                     
                     for (int i = 0; i < recordCount; i++) {
                         int monthValue = monthReader.readBits();
@@ -95,11 +129,9 @@ public class CompressedQueryEngine {
                         int floor_area_sqmTemp = floor_area_sqmReader.readBits();
                         
                         if ((monthValue == monthIndex1 || monthValue == monthIndex2) && 
-                            townValue == townIndex) {
-                            double floor_area_sqmValue = Double.parseDouble(reversedMap.get(floor_area_sqmTemp));
-                            if (floor_area_sqmValue >= 80) {
+                            townValue == townIndex &&
+                            floor_area_sqmTemp >= floor_area_sqmIndex) {
                                 matchingIndices.add(i);
-                            }
                         }
                     }
 
@@ -448,14 +480,14 @@ public class CompressedQueryEngine {
         Map<String, Integer> monthDict = loadDictionary("month");
         Map<String, Integer> townDict = loadDictionary("town");
         Map<String, Integer> floor_area_sqmDict = loadDictionary("floor_area_sqm");
-        Map<Integer, String> reversedFloorAreaSqmDict = reverseMap(floor_area_sqmDict);
         
         // Get the indices for our target values
         Integer monthIndex1 = monthDict.getOrDefault(yearMonth, -1);
         Integer monthIndex2 = monthDict.getOrDefault(nextMonthStr, -1);
         Integer townIndex = townDict.get(town);
+        Integer floor_area_sqmIndex = getFloorAreaSqmIndex(floor_area_sqmDict);
 
-        Map<String, List<Integer>> relevantZonesIndices = ZoneMetadata.getCompressedZonesIndicesFromRelevantZones(monthIndex1, monthIndex2, townIndex, columnStore.getDataDirectory(), reversedFloorAreaSqmDict);
+        Map<String, List<Integer>> relevantZonesIndices = ZoneMetadata.getCompressedZonesIndicesFromRelevantZones(monthIndex1, monthIndex2, townIndex, floor_area_sqmIndex, columnStore.getDataDirectory());
 
         return relevantZonesIndices;
     }

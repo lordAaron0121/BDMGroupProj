@@ -266,7 +266,7 @@ public class ZoneMetadata implements Serializable {
         return finalValues;
     }
 
-    public static Map<String, List<Integer>> getCompressedZonesIndicesFromRelevantZones(int yearMonthIndex, int nextMonthIndex, int townIndex, String dataDirectory, Map<Integer, String> reversedFloorAreaSqmDict) throws IOException {        
+    public static Map<String, List<Integer>> getCompressedZonesIndicesFromRelevantZones(int yearMonthIndex, int nextMonthIndex, int townIndex, int floor_area_sqmIndex, String dataDirectory) throws IOException {        
         // Calculate the next month for the range (manually, without using YearMonth)
 
         List<ZoneMetadata> yearMonthZones = readZoneMetadata("month", dataDirectory);
@@ -323,7 +323,7 @@ public class ZoneMetadata implements Serializable {
         for (int i=0; i<monthRelevantData.size(); i++) {
             if (monthRelevantData.get(i).equals(yearMonthIndex) || monthRelevantData.get(i).equals(nextMonthIndex)) {
                 if (townRelevantData.get(i).equals(townIndex)) {
-                    if (Double.parseDouble(reversedFloorAreaSqmDict.get(floor_area_sqmRelevantData.get(i))) >= 80) {
+                    if (floor_area_sqmRelevantData.get(i) >= floor_area_sqmIndex) {
                         filteredIndices.add(i);
                     }
                 }
