@@ -451,8 +451,8 @@ public class CompressedQueryEngine {
         Map<Integer, String> reversedFloorAreaSqmDict = reverseMap(floor_area_sqmDict);
         
         // Get the indices for our target values
-        Integer monthIndex1 = monthDict.get(yearMonth);
-        Integer monthIndex2 = monthDict.get(nextMonthStr);
+        Integer monthIndex1 = monthDict.getOrDefault(yearMonth, -1);
+        Integer monthIndex2 = monthDict.getOrDefault(nextMonthStr, -1);
         Integer townIndex = townDict.get(town);
 
         Map<String, List<Integer>> relevantZonesIndices = ZoneMetadata.getCompressedZonesIndicesFromRelevantZones(monthIndex1, monthIndex2, townIndex, columnStore.getDataDirectory(), reversedFloorAreaSqmDict);

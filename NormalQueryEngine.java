@@ -36,6 +36,7 @@ public class NormalQueryEngine {
 
                     if (value.equals("No result")) {
                         writer.write(String.format("%s,%s,%s,%s,%s", year, month, town, category, value));
+                        writer.newLine();
                     }
                     
                     else {
@@ -220,6 +221,8 @@ public class NormalQueryEngine {
         timings.put("Minimum Price per Square Meter", minPsm.getDurationMs());
         totalTime += minPsm.getDurationMs();
 
+        saveToCSV(results, yearMonth.split("-")[0], yearMonth.split("-")[1], town, "ScanResult_U2121346H.csv");
+
         // Print total time taken for all queries
         System.out.println("Total Time for all queries: " + totalTime + "ms");
 
@@ -338,8 +341,6 @@ public class NormalQueryEngine {
         // Print total time taken for all queries
         System.out.println("Total Time for all queries: " + totalTime + "ms");
         
-        saveToCSV(results, yearMonth.split("-")[0], yearMonth.split("-")[1], town, "ScanResult_U2121346H.csv");
-
         return resultsAndTimings;
     }
 }
