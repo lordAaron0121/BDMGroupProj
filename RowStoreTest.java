@@ -15,8 +15,8 @@ public class RowStoreTest {
         
         // Load data from CSV
         System.out.println("Loading data from CSV...");
-        long startLoadTime = System.nanoTime();
         String filePath = "../data/ResalePricesSingapore.csv";
+        long startLoadTime = System.nanoTime();
         rowStore = CSVLoader.rowStoreLoadCSV(filePath);
         long csvLoadTime = (System.nanoTime() - startLoadTime) / 1_000_000;
         System.out.println("CSV Loading Time: " + csvLoadTime + " ms");
