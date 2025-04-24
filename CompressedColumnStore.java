@@ -327,8 +327,6 @@ public class CompressedColumnStore {
         return result;
     }
     
-    
-
     private void saveColumnMetadata(Map<String, List<ZoneMetadata>> columnMetadataMap) throws IOException {
         for (Map.Entry<String, List<ZoneMetadata>> entry : columnMetadataMap.entrySet()) {
             String columnName = entry.getKey();

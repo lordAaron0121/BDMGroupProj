@@ -23,25 +23,6 @@ public class RowStore {
         }
     }
 
-    public void saveToFile(String filePath) {
-        try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(filePath))) {
-            oos.writeObject(rows);
-            oos.writeObject(columnNames);
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to save row store to file: " + filePath, e);
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    public void loadFromFile(String filePath) {
-        try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(filePath))) {
-            this.rows = (List<Map<String, Object>>) ois.readObject();
-            this.columnNames = (Set<String>) ois.readObject();
-        } catch (IOException | ClassNotFoundException e) {
-            throw new RuntimeException("Failed to load row store from file: " + filePath, e);
-        }
-    }
-
     public List<Map<String, Object>> filter(Map<String, Predicate<Object>> conditions) {
         List<Map<String, Object>> filteredRows = new ArrayList<>();
         
