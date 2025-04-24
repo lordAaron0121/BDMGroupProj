@@ -156,7 +156,7 @@ public class CompressionTestMain {
         }
     }
 
-    private static void performDetailedMemoryAnalysis(String normalColumnStoreDir, String compressedColumnStoreDir) {
+    public static void performDetailedMemoryAnalysis(String normalColumnStoreDir, String compressedColumnStoreDir) {
         System.out.println("\n--- DETAILED COLUMN-BY-COLUMN MEMORY ANALYSIS ---");
         
         File normalDir = new File(normalColumnStoreDir);
@@ -223,7 +223,7 @@ public class CompressionTestMain {
                 " | Memory saved: " + formatMemorySize(totalMemorySaved));
     }
 
-    private static String formatDollar(String value) {
+    public static String formatDollar(String value) {
         try {
             double num = Double.parseDouble(value);
             return String.format("%.2f", num);
@@ -232,12 +232,12 @@ public class CompressionTestMain {
         }
     }
 
-    private static void printResult(Map<String, String> results, Map<String, Double> timings, String query) {
+    public static void printResult(Map<String, String> results, Map<String, Double> timings, String query) {
         System.out.printf("%-32s %-12s | Duration: %6.2f ms\n", query, formatDollar(results.get(query)), timings.get(query));
     }
     
     @SuppressWarnings("unchecked")
-    private static void printQueryResults(Map<String, Object> resultsAndTimings) {
+    public static void printQueryResults(Map<String, Object> resultsAndTimings) {
         // Get the results map
         Map<String, String> results = (Map<String, String>) resultsAndTimings.get("results");
 
@@ -252,7 +252,7 @@ public class CompressionTestMain {
         printResult(results, timings, "Minimum Price per Square Meter");
     }
     
-    private static String formatMemorySize(long bytes) {
+    public static String formatMemorySize(long bytes) {
         if (bytes < 1024) {
             return bytes + " B";
         } else if (bytes < 1024 * 1024) {
@@ -264,7 +264,7 @@ public class CompressionTestMain {
         }
     }
     
-    private static String formatTime(long nanoTime) {
+    public static String formatTime(long nanoTime) {
         if (nanoTime < 1000) {
             return nanoTime + " ns";
         } else if (nanoTime < 1000 * 1000) {
