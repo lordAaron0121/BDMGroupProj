@@ -523,7 +523,7 @@ public class CompressedQueryEngine {
         List<Double> areas = readAndUncompressRelevantDoubleData("floor_area_sqm", relevantZonesIndices);
         
         double minPricePerSqm = Double.MAX_VALUE;
-        for (int index = 0; index < relevantZonesIndices.size(); index++) {
+        for (int index = 0; index < relevantZonesIndices.get("indices").size(); index++) {
             double price = resalePrices.get(index);
             double area = areas.get(index);
             double pricePerSqm = price / area;
