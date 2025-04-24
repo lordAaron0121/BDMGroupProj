@@ -8,31 +8,31 @@ import java.nio.file.Paths;
 import java.util.*;
 
 public class ZoneMetadata implements Serializable {
-    private String minValue;
-    private String maxValue;
+    private Object minValue;
+    private Object maxValue;
     private long startByte;
     private long endByte;
 
-    public ZoneMetadata(String minValue, String maxValue, long startByte, long endByte) {
+    public ZoneMetadata(Object minValue, Object maxValue, long startByte, long endByte) {
         this.minValue = minValue;
         this.maxValue = maxValue;
         this.startByte = startByte;
         this.endByte = endByte;
     }
 
-    public String getMinValue() {
+    public Object getMinValue() {
         return minValue;
     }
 
-    public void setMinValue(String minValue) {
+    public void setMinValue(Object minValue) {
         this.minValue = minValue;
     }
 
-    public String getMaxValue() {
+    public Object getMaxValue() {
         return maxValue;
     }
 
-    public void setMaxValue(String maxValue) {
+    public void setMaxValue(Object maxValue) {
         this.maxValue = maxValue;
     }
 
@@ -62,16 +62,30 @@ public class ZoneMetadata implements Serializable {
         Path zoneMetadataFilePath = Paths.get(dataDirectory, columnName + "_zone_map.txt");
 
         try (BufferedReader reader = Files.newBufferedReader(zoneMetadataFilePath)) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                String[] parts = line.split(",");
-                String max = parts[0];
-                String min = parts[1];
-                long startBytePosition = Long.parseLong(parts[2]);
-                long endBytePosition = Long.parseLong(parts[3]);
+            String line = reader.readLine();
+            if (line.equals("false")) {
+                while ((line = reader.readLine()) != null) {
+                    String[] parts = line.split(",");
+                    String min = parts[0];
+                    String max = parts[1];
+                    long startBytePosition = Long.parseLong(parts[2]);
+                    long endBytePosition = Long.parseLong(parts[3]);
 
-                // Create a new ZoneMetadata object and add to the list
-                zoneMetadataList.add(new ZoneMetadata(min, max, startBytePosition, endBytePosition));
+                    // Create a new ZoneMetadata object and add to the list
+                    zoneMetadataList.add(new ZoneMetadata(min, max, startBytePosition, endBytePosition));
+                }
+            }
+            else {
+                while ((line = reader.readLine()) != null) {
+                    String[] parts = line.split(",");
+                    Double min = Double.parseDouble(parts[0]);
+                    Double max = Double.parseDouble(parts[1]);
+                    long startBytePosition = Long.parseLong(parts[2]);
+                    long endBytePosition = Long.parseLong(parts[3]);
+
+                    // Create a new ZoneMetadata object and add to the list
+                    zoneMetadataList.add(new ZoneMetadata(min, max, startBytePosition, endBytePosition));
+                }
             }
         }
 
@@ -86,12 +100,36 @@ public class ZoneMetadata implements Serializable {
             ZoneMetadata zone = zones.get(i);
 
             // Compare the value lexicographically with the zone's min and max values
-            if (value.compareTo(zone.getMinValue()) >= 0 && value.compareTo(zone.getMaxValue()) <= 0) {
-                relevantIndexes.add(i); // Add index of relevant zone
+            if (zone.getMinValue() instanceof String && zone.getMaxValue() instanceof String) {
+                String min = (String) zone.getMinValue();
+                String max = (String) zone.getMaxValue();
+            
+                if (value.compareTo(min) >= 0 && value.compareTo(max) <= 0) {
+                    relevantIndexes.add(i); // Add index of relevant zone
+                }                
+            }
+            else if (zone.getMinValue() instanceof Double && zone.getMaxValue() instanceof Double && isDouble(value)) {
+                Double min = (Double) zone.getMinValue();
+                Double max = (Double) zone.getMaxValue();
+                Double doubleValue = Double.parseDouble(value);
+            
+                if (doubleValue >= min && doubleValue <= max) {
+                    relevantIndexes.add(i); // Add index of relevant zone
+                }   
             }
         }
 
         return relevantIndexes;
+    }
+
+    // Utility method to check if a string is a valid Double
+    private static boolean isDouble(String s) {
+        try {
+            Double.parseDouble(s);
+            return true;
+        } catch (NumberFormatException e) {
+            return false;
+        }
     }
 
     public static List<Integer> getIntersection(List<List<Integer>> lists) {
@@ -115,22 +153,7 @@ public class ZoneMetadata implements Serializable {
 
     public static Map<String, List<Integer>> getDataFromRelevantZones(String yearMonth, String town, String dataDirectory) throws IOException {        
         // Calculate the next month for the range (manually, without using YearMonth)
-        String[] parts = yearMonth.split("-");
-        String year = parts[0];
-        String month = parts[1];
-        
-        // Simple calculation for next month
-        String nextMonthStr;
-        if (month.equals("12")) {
-            // If December, next month is January of next year
-            int nextYear = Integer.parseInt(year) + 1;
-            nextMonthStr = nextYear + "-01";
-        } else {
-            // Otherwise, just increment the month
-            int nextMonth = Integer.parseInt(month) + 1;
-            // Ensure two digits for month
-            nextMonthStr = year + "-" + (nextMonth < 10 ? "0" + nextMonth : String.valueOf(nextMonth));
-        }
+        String nextMonthStr = PerformanceTest.getNextMonthStr(yearMonth);
 
         List<ZoneMetadata> yearMonthZones = readZoneMetadata("month", dataDirectory);
         Set<Integer> unionSet = new HashSet<>();
@@ -243,4 +266,104 @@ public class ZoneMetadata implements Serializable {
         return finalValues;
     }
 
+    public static Map<String, List<Integer>> getCompressedZonesIndicesFromRelevantZones(int yearMonthIndex, int nextMonthIndex, int townIndex, String dataDirectory, Map<Integer, String> reversedFloorAreaSqmDict) throws IOException {        
+        // Calculate the next month for the range (manually, without using YearMonth)
+
+        List<ZoneMetadata> yearMonthZones = readZoneMetadata("month", dataDirectory);
+        Set<Integer> unionSet = new HashSet<>();
+        unionSet.addAll(getRelevantZoneIndexes(yearMonthZones, String.valueOf(yearMonthIndex)));
+        unionSet.addAll(getRelevantZoneIndexes(yearMonthZones, String.valueOf(nextMonthIndex)));
+        List<Integer> yearMonthRelevantZones = new ArrayList<>(unionSet);
+
+        List<ZoneMetadata> townZones = readZoneMetadata("town", dataDirectory);
+        List<Integer> townRelevantZones = getRelevantZoneIndexes(townZones, String.valueOf(townIndex));
+
+        List<List<Integer>> allRelevantZones = new ArrayList<>();
+        allRelevantZones.add(yearMonthRelevantZones);
+        allRelevantZones.add(townRelevantZones);
+
+        List<Integer> filteredZones = getIntersection(allRelevantZones);
+        Collections.sort(filteredZones);
+
+        List<String> columns = Arrays.asList("month", "town", "floor_area_sqm");
+        Map<String, List<Integer>> relevantData = new HashMap<>();
+
+        for (String columnName : columns) {
+            // Iterate through the zones and read the relevant data from the file
+            List<ZoneMetadata> columnZones = readZoneMetadata(columnName, dataDirectory);
+            Path columnFilePath = Paths.get(dataDirectory, columnName + ".cmp");
+            List<Integer> relevantColumnData = new ArrayList<>();
+
+            try (RandomAccessFile file = new RandomAccessFile(columnFilePath.toFile(), "r")) {
+                int bitsPerValue = file.readInt();
+                int expectedCount = file.readInt();
+                for (Integer zoneIndex : filteredZones) {
+                    ZoneMetadata zoneMetadata = columnZones.get(zoneIndex);
+
+                    // We know the byte positions of the zone, so let's seek to the start byte position
+                    file.seek(zoneMetadata.getStartByte());
+
+                    // Read data from the zone (between start and end byte positions)
+                    long bytesToRead = zoneMetadata.getEndByte() - zoneMetadata.getStartByte();
+                    byte[] dataBuffer = new byte[(int) bytesToRead];
+                    file.readFully(dataBuffer);
+
+                    List<Integer> compressedData = CompressedColumnStore.readCompressedData(dataBuffer, bitsPerValue, expectedCount);
+
+                    relevantColumnData.addAll(compressedData);
+                }
+            }
+            relevantData.put(columnName, relevantColumnData);
+        }
+
+        List<Integer> monthRelevantData = relevantData.get("month");
+        List<Integer> townRelevantData = relevantData.get("town");
+        List<Integer> floor_area_sqmRelevantData = relevantData.get("floor_area_sqm");
+        List<Integer> filteredIndices = new ArrayList<>();
+        for (int i=0; i<monthRelevantData.size(); i++) {
+            if (monthRelevantData.get(i).equals(yearMonthIndex) || monthRelevantData.get(i).equals(nextMonthIndex)) {
+                if (townRelevantData.get(i).equals(townIndex)) {
+                    if (Double.parseDouble(reversedFloorAreaSqmDict.get(floor_area_sqmRelevantData.get(i))) >= 80) {
+                        filteredIndices.add(i);
+                    }
+                }
+            }
+            // break;
+        }
+
+        System.out.println("Found " + filteredIndices.size() + " matching transactions");
+
+        Map<String, List<Integer>> result = new HashMap<>();
+        result.put("zones", filteredZones);
+        result.put("indices", filteredIndices);
+        return result;
+    }
+
+    public static List<Integer> readFilteredCompressedZones(Path columnCmpPath, List<ZoneMetadata> columnZones, List<Integer> filteredZones, List<Integer> indices, int valuesPerZone) throws IOException {
+        List<Integer> relevantZonesColumnData = new ArrayList<>();
+
+        try (RandomAccessFile file = new RandomAccessFile(columnCmpPath.toFile(), "r")) {
+            int bitsPerValue = file.readInt();
+            for (Integer zoneIndex : filteredZones) {
+                ZoneMetadata zoneMetadata = columnZones.get(zoneIndex);
+
+                long bytesToRead = zoneMetadata.getEndByte() - zoneMetadata.getStartByte();
+                file.seek(zoneMetadata.getStartByte());
+
+                byte[] dataBuffer = new byte[(int) bytesToRead];
+                file.readFully(dataBuffer);
+
+                // Decompress the buffer to get actual values
+                List<Integer> values = CompressedColumnStore.readCompressedData(dataBuffer, bitsPerValue, valuesPerZone);
+
+                relevantZonesColumnData.addAll(values); // optionally filter values based on your predicate here
+            }
+        }
+        List<Integer> relevantColumnData = new ArrayList<>();
+        for (int index : indices) {
+            relevantColumnData.add(relevantZonesColumnData.get(index));
+        }
+
+        return relevantColumnData;
+    }
 }
