@@ -1,5 +1,6 @@
 // ColumnStore.java
 import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.*;
 
@@ -28,12 +29,7 @@ public class NormalColumnStore {
             throw new IOException("CSV file does not exist: " + csvFilePath);
         }
 
-        Map<String, List<ZoneMetadata>> columnMetadataList = new HashMap<>();
         Map<String, List<String>> columnValuesMap = new HashMap<>();
-        Map<String, String> columnZoneMinMap = new HashMap<>();
-        Map<String, String> columnZoneMaxMap = new HashMap<>();
-        Map<String, Long> columnZoneStartByte = new HashMap<>();
-        Map<String, Long> columnZoneEndByte = new HashMap<>();
 
         try (BufferedReader reader = Files.newBufferedReader(csvPath)) {
             // Read the header to get column names
@@ -48,19 +44,12 @@ public class NormalColumnStore {
             // Initialize the metadata and column storage
             for (String columnName : columnNames) {
                 columnValuesMap.put(columnName, new ArrayList<>());
-                columnMetadataList.put(columnName, new ArrayList<>());
-                columnZoneMinMap.put(columnName, null);
-                columnZoneMaxMap.put(columnName, null);
-                columnZoneStartByte.put(columnName, 0L);
-                columnZoneEndByte.put(columnName, 0L);
             }
 
             // Process each row
             String line;
-            int rowCount = 0;
 
             while ((line = reader.readLine()) != null) {
-                rowCount++;
                 String[] values = line.split(",");
 
                 // Make sure we have the right number of values
@@ -74,45 +63,10 @@ public class NormalColumnStore {
                     String columnName = columnNames.get(i);
                     List<String> columnValues = columnValuesMap.get(columnName);
 
-                    try {
-                        String columnValue = values[i];
-                        if (columnZoneMinMap.get(columnName) != null) {
-                            if (columnZoneMinMap.get(columnName).compareTo(columnValue) > 0){
-                                columnZoneMinMap.put(columnName, columnValue);
-                            }
-                        }
-                        else {
-                            columnZoneMinMap.put(columnName, columnValue);
-                        }
-
-                        if (columnZoneMaxMap.get(columnName) != null) {
-                            if (columnZoneMaxMap.get(columnName).compareTo(columnValue) < 0){
-                                columnZoneMaxMap.put(columnName, columnValue);
-                            }
-                        }
-                        else {
-                            columnZoneMaxMap.put(columnName, columnValue);
-                        }
-
-                    } catch (NumberFormatException e) {
-                        // Handle non-numeric values gracefully, if required
-                    }
-
                     // Add the value to the respective column's list of values
                     columnValues.add(values[i]);
-                    columnZoneEndByte.put(columnName,  columnZoneEndByte.get(columnName) + values[i].length() + System.lineSeparator().length());
                 }
 
-                // If we've reached 800 values in the column, save the data
-                if (rowCount % 800 == 0) {
-                    for (String columnName : columnNames) {
-                        List<ZoneMetadata> columnMetadata = columnMetadataList.get(columnName);
-                        columnMetadata.add(new ZoneMetadata(columnZoneMaxMap.get(columnName), columnZoneMinMap.get(columnName), columnZoneStartByte.get(columnName), columnZoneEndByte.get(columnName)));
-                        columnZoneMinMap.put(columnName, null);
-                        columnZoneMaxMap.put(columnName, null);
-                        columnZoneStartByte.put(columnName, columnZoneEndByte.get(columnName));
-                        }
-                }
             }
 
             // Handle the last remaining values for each column
@@ -120,15 +74,92 @@ public class NormalColumnStore {
                 List<String> columnValues = columnValuesMap.get(columnName);
                 if (!columnValues.isEmpty()) {
                     saveColumnData(columnValues, columnName);
-                    List<ZoneMetadata> columnMetadata = columnMetadataList.get(columnName);
-                    columnMetadata.add(new ZoneMetadata(columnZoneMaxMap.get(columnName), columnZoneMinMap.get(columnName), columnZoneStartByte.get(columnName), columnZoneEndByte.get(columnName)));
-                    columnZoneStartByte.put(columnName, columnZoneEndByte.get(columnName));
                 }
             }
 
-            // Save the column metadata to a separate file
-            saveColumnMetadata(columnMetadataList);
+        }
+    }
 
+    public void generateZoneMapsFromColumns(int chunkSize) throws IOException {
+        Map<String, List<ZoneMetadata>> columnZoneMaps = new HashMap<>();
+        Map<String, Boolean> allDoublesList = new HashMap<>();
+
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(Paths.get(dataDirectory), "*.col")) {
+            for (Path columnFile : stream) {
+                String columnName = columnFile.getFileName().toString().replace(".col", "");
+                List<ZoneMetadata> zoneMetadataList = new ArrayList<>();
+        
+                boolean allDoubles = true;
+        
+                // First pass: determine if all lines are parsable as doubles
+                try (BufferedReader reader = Files.newBufferedReader(columnFile)) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        if (!isDouble(line)) {
+                            allDoubles = false;
+                            break;
+                        }
+                    }
+                }
+        
+                // Second pass: process in chunks and collect zone metadata
+                try (BufferedReader reader = Files.newBufferedReader(columnFile)) {
+                    String line;
+                    int lineCount = 0;
+                    Object min = null, max = null;
+                    long byteStart = 0;
+                    long byteEnd = 0;
+        
+                    while ((line = reader.readLine()) != null) {
+                        lineCount++;
+                        long lineBytes = line.getBytes(StandardCharsets.UTF_8).length + System.lineSeparator().getBytes().length;
+                        byteEnd += lineBytes;
+        
+                        if (allDoubles) {
+                            Double value = Double.parseDouble(line);
+                            if (min == null || ((Double) min) > value) min = value;
+                            if (max == null || ((Double) max) < value) max = value;
+                        } else {
+                            if (min == null || min.toString().compareTo(line) > 0) min = line;
+                            if (max == null || max.toString().compareTo(line) < 0) max = line;
+                        }
+        
+                        if (lineCount % chunkSize == 0) {
+                            if (allDoubles) {
+                                zoneMetadataList.add(new ZoneMetadata((Double) min, (Double) max, byteStart, byteEnd));
+                            } else {
+                                zoneMetadataList.add(new ZoneMetadata(min.toString(), max.toString(), byteStart, byteEnd));
+                            }
+                            byteStart = byteEnd;
+                            min = max = null;
+                        }
+                    }
+        
+                    // Final chunk
+                    if (min != null && max != null) {
+                        if (allDoubles) {
+                            zoneMetadataList.add(new ZoneMetadata((Double) min, (Double) max, byteStart, byteEnd));
+                        } else {
+                            zoneMetadataList.add(new ZoneMetadata(min.toString(), max.toString(), byteStart, byteEnd));
+                        }
+                    }
+        
+                    columnZoneMaps.put(columnName, zoneMetadataList);
+                    allDoublesList.put(columnName, allDoubles);
+                }
+            }
+        }
+
+        saveColumnMetadata(columnZoneMaps, allDoublesList);
+    }
+
+    // Utility method to check if a string is a valid Double
+    private boolean isDouble(String s) {
+        try {
+            Double.parseDouble(s);
+            return true;
+        } catch (NumberFormatException e) {
+            return false;
         }
     }
 
@@ -143,12 +174,14 @@ public class NormalColumnStore {
         }
     }
 
-    private void saveColumnMetadata(Map<String, List<ZoneMetadata>> columnMetadataMap) throws IOException {
+    private void saveColumnMetadata(Map<String, List<ZoneMetadata>> columnMetadataMap, Map<String, Boolean> allDoublesList) throws IOException {
         for (Map.Entry<String, List<ZoneMetadata>> entry : columnMetadataMap.entrySet()) {
             String columnName = entry.getKey();
             Path metadataFile = Paths.get(dataDirectory, columnName + "_zone_map.txt");
 
             try (BufferedWriter metadataWriter = Files.newBufferedWriter(metadataFile)) {
+                metadataWriter.write(Boolean.toString(allDoublesList.get(columnName)));
+                metadataWriter.newLine();
                 for (ZoneMetadata zone : entry.getValue()) {
                     metadataWriter.write(zone.toString());
                     metadataWriter.newLine();

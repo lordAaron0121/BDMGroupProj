@@ -52,6 +52,8 @@ public class CompressionTestMain {
             
             System.out.println("Normal column store created successfully!");
             System.out.println("Normal column store memory usage: " + formatMemorySize(normalMemoryUsed));
+
+            normalStore.generateZoneMapsFromColumns(800);
             
             // Compressed Column Store
             System.out.println("\nInitializing compressed column store...");
@@ -68,6 +70,8 @@ public class CompressionTestMain {
             
             System.out.println("Compressed column store created successfully!");
             System.out.println("Compressed column store memory usage: " + formatMemorySize(compressedMemoryUsed));
+
+            compressedStore.generateZoneMapsFromCompressedColumns(800);
             
             // Memory comparison
             double memoryReductionPercent = 100.0 * (normalMemoryUsed - compressedMemoryUsed) / normalMemoryUsed;
@@ -85,29 +89,37 @@ public class CompressionTestMain {
             // Run normal queries and measure time
             System.out.println("\nRunning queries on normal column store...");
             long normalQueryStartTime = System.nanoTime();
-            Map<String, Map<String, Double>> normalResults = normalQueryEngine.runAllQueries(yearMonth, town);
+            Map<String, Object> normalResults = normalQueryEngine.runAllQueries(yearMonth, town);
             long normalQueryEndTime = System.nanoTime();
             long normalQueryTime = normalQueryEndTime - normalQueryStartTime;
 
             // Run normal queries with Zone maps and measure time
             System.out.println("\nRunning queries on normal column store with Zone Map...");
             long normalQueryZoneMapStartTime = System.nanoTime();
-            Map<String, Map<String, Double>> normalZoneMapResults = normalQueryEngine.runAllQueriesZoneMap(yearMonth, town);
+            Map<String, Object> normalZoneMapResults = normalQueryEngine.runAllQueriesZoneMap(yearMonth, town);
             long normalQueryZoneMapEndTime = System.nanoTime();
             long normalQueryZoneMapTime = normalQueryZoneMapEndTime - normalQueryZoneMapStartTime;
             
             // Run compressed queries and measure time
             System.out.println("\nRunning queries on compressed column store...");
             long compressedQueryStartTime = System.nanoTime();
-            Map<String, Map<String, Double>> compressedResults = compressedQueryEngine.runAllQueries(yearMonth, town);
+            Map<String, Object> compressedResults = compressedQueryEngine.runAllQueries(yearMonth, town);
             long compressedQueryEndTime = System.nanoTime();
             long compressedQueryTime = compressedQueryEndTime - compressedQueryStartTime;
-            
+
+            // Run compressed queries with Zone Map and measure time
+            System.out.println("\nRunning queries on compressed column store...");
+            long compressedQueryZoneMapStartTime = System.nanoTime();
+            Map<String, Object> compressedZoneMapResults = compressedQueryEngine.runAllQueriesZoneMap(yearMonth, town);
+            long compressedQueryZoneMapEndTime = System.nanoTime();
+            long compressedQueryZoneMapTime = compressedQueryZoneMapEndTime - compressedQueryZoneMapStartTime;
+
             // Time comparison
             System.out.println("\n--- QUERY TIME COMPARISON ---");
             System.out.println("Normal column store query time: " + formatTime(normalQueryTime));
             System.out.println("Normal column store with Zone Map query time: " + formatTime(normalQueryZoneMapTime));
             System.out.println("Compressed column store query time: " + formatTime(compressedQueryTime));
+            System.out.println("Compressed column store with Zone Map query time: " + formatTime(compressedQueryZoneMapTime));
             
             double timeRatioPercent = 100.0 * compressedQueryTime / normalQueryTime;
             System.out.println("Compressed/Normal time ratio: " + String.format("%.2f%%", timeRatioPercent));
@@ -134,6 +146,9 @@ public class CompressionTestMain {
             
             System.out.println("\nCompressed Column Store Results:");
             printQueryResults(compressedResults);
+
+            System.out.println("\nCompressed Column Store with ZoneMap Results:");
+            printQueryResults(compressedZoneMapResults);
             
         } catch (IOException e) {
             System.err.println("Error: " + e.getMessage());
@@ -207,20 +222,34 @@ public class CompressionTestMain {
                 " | Memory reduction with compression: " + String.format("%.2f%%", totalReductionPercent) +
                 " | Memory saved: " + formatMemorySize(totalMemorySaved));
     }
+
+    private static String formatDollar(String value) {
+        try {
+            double num = Double.parseDouble(value);
+            return String.format("%.2f", num);
+        } catch (NumberFormatException e) {
+            return value; // Return as-is if it's not a number
+        }
+    }
+
+    private static void printResult(Map<String, String> results, Map<String, Double> timings, String query) {
+        System.out.printf("%-32s %-12s | Duration: %6.2f ms\n", query, formatDollar(results.get(query)), timings.get(query));
+    }
     
-    private static void printQueryResults(Map<String, Map<String, Double>> resultsAndTimings) {
+    @SuppressWarnings("unchecked")
+    private static void printQueryResults(Map<String, Object> resultsAndTimings) {
         // Get the results map
-        Map<String, Double> results = resultsAndTimings.get("results");
+        Map<String, String> results = (Map<String, String>) resultsAndTimings.get("results");
 
         // Get the timings map
-        Map<String, Double> timings = resultsAndTimings.get("timings");
+        Map<String, Double> timings = (Map<String, Double>) resultsAndTimings.get("timings");
+
 
         // Output the result with the duration, ensuring aligned columns
-        System.out.printf("%-32s %-12s | Duration: %6.2f ms\n", "Minimum Price:", String.format("$%.2f", results.get("Minimum Price")), timings.get("Minimum Price"));
-        System.out.printf("%-32s %-12s | Duration: %6.2f ms\n", "Standard Deviation of Price:", String.format("$%.2f", results.get("Standard Deviation of Price")), timings.get("Standard Deviation of Price"));
-        System.out.printf("%-32s %-12s | Duration: %6.2f ms\n", "Average Price:", String.format("$%.2f", results.get("Average Price")), timings.get("Average Price"));
-        System.out.printf("%-32s %-12s | Duration: %6.2f ms\n", "Minimum Price per Square Meter:", String.format("$%.2f", results.get("Minimum Price per Square Meter")), timings.get("Minimum Price per Square Meter"));
-
+        printResult(results, timings, "Minimum Price");
+        printResult(results, timings, "Standard Deviation of Price");
+        printResult(results, timings, "Average Price");
+        printResult(results, timings, "Minimum Price per Square Meter");
     }
     
     private static String formatMemorySize(long bytes) {

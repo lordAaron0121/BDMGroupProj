@@ -1,6 +1,7 @@
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.util.*;
+import java.nio.file.*;
 
 public class CompressedQueryEngine {
     private CompressedColumnStore columnStore;
@@ -214,6 +215,30 @@ public class CompressedQueryEngine {
         
     }
 
+    public List<Double> readAndUncompressRelevantDoubleData(String columnName, Map<String, List<Integer>> relevantZonesIndices) throws IOException {
+
+        String compressedPath = columnStore.getDataDirectory() + java.io.File.separator + columnName + ".cmp";
+        List<ZoneMetadata> columnZones = ZoneMetadata.readZoneMetadata(columnName, columnStore.getDataDirectory());
+
+        List<Integer> compressedData = ZoneMetadata.readFilteredCompressedZones(Paths.get(compressedPath), columnZones, relevantZonesIndices.get("zones"), relevantZonesIndices.get("indices"), 800);
+
+        try {
+            List<Double> result = new ArrayList<>();
+
+            Map<String, Integer> columnDict = loadDictionary(columnName);
+
+            Map<Integer, String> reversedMap = reverseMap(columnDict);
+
+            for (int index : compressedData) {
+                result.add(Double.parseDouble(reversedMap.get(index)));
+            }
+            return result;
+        } catch (Exception e) {
+            System.err.println("Uncompression failed " + e.getMessage());
+            return new ArrayList<>();
+        }
+    }
+
     /**
      * Helper method to load compressed data
      */
@@ -229,7 +254,7 @@ public class CompressedQueryEngine {
     /**
      * Helper class to read bits from a byte array
      */
-    private class BitStreamReader {
+    public class BitStreamReader {
         private byte[] data;
         private int bitsPerValue;
         private int position = 0;
@@ -286,29 +311,52 @@ public class CompressedQueryEngine {
         return reversedMap;
     }
     
+    public List<Integer> readFilteredCompressedZones(Path columnCmpPath, List<ZoneMetadata> columnZones, List<Integer> filteredZones, int bitsPerValue, int valuesPerZone) throws IOException {
+        List<Integer> relevantColumnData = new ArrayList<>();
+
+        try (RandomAccessFile file = new RandomAccessFile(columnCmpPath.toFile(), "r")) {
+            for (Integer zoneIndex : filteredZones) {
+                ZoneMetadata zoneMetadata = columnZones.get(zoneIndex);
+
+                long bytesToRead = zoneMetadata.getEndByte() - zoneMetadata.getStartByte();
+                file.seek(zoneMetadata.getStartByte());
+
+                byte[] dataBuffer = new byte[(int) bytesToRead];
+                file.readFully(dataBuffer);
+
+                // Decompress the buffer to get actual values
+                List<Integer> values = CompressedColumnStore.readCompressedData(dataBuffer, bitsPerValue, valuesPerZone);
+
+                relevantColumnData.addAll(values); // optionally filter values based on your predicate here
+            }
+        }
+
+        return relevantColumnData;
+    }
+
     /**
      * Query 1: Get minimum resale price for a specific month and town
      */
-    public double getMinimumPrice(String yearMonth, String town) throws IOException {
+    public String getMinimumPrice(String yearMonth, String town) throws IOException {
         List<Integer> subset = getSubsetByMonthAndTownOptimized(yearMonth, town);
         if (subset.isEmpty()) {
-            return 0.0;
+            return "No result";
         }
         List<String> prices = readAndUncompressData("resale_price");
         Double minPrice = Double.MAX_VALUE;
         for (int i : subset) {
             minPrice = Math.min(minPrice, Double.parseDouble(prices.get(i)));
         }
-        return minPrice;
+        return String.valueOf(minPrice);
     }
     
     /**
      * Query 2: Calculate standard deviation of prices for a specific month and town
      */
-    public double getStandardDeviationPrice(String yearMonth, String town) throws IOException {
+    public String getStandardDeviationPrice(String yearMonth, String town) throws IOException {
         List<Integer> subset = getSubsetByMonthAndTownOptimized(yearMonth, town);
         if (subset.isEmpty()) {
-            return 0.0;
+            return "No result";
         }
         List<String> prices = readAndUncompressData("resale_price");
                 
@@ -326,16 +374,16 @@ public class CompressedQueryEngine {
         variance /= (subset.size()-1);
         
         // Return standard deviation (square root of variance)
-        return Math.sqrt(variance);
+        return String.valueOf(Math.sqrt(variance));
     }
     
     /**
      * Query 3: Calculate average resale price for a specific month and town
      */
-    public double getAveragePrice(String yearMonth, String town) throws IOException {
+    public String getAveragePrice(String yearMonth, String town) throws IOException {
         List<Integer> subset = getSubsetByMonthAndTownOptimized(yearMonth, town);
         if (subset.isEmpty()) {
-            return 0.0;
+            return "No result";
         }
 
         List<String> prices = readAndUncompressData("resale_price");
@@ -344,16 +392,16 @@ public class CompressedQueryEngine {
         for (int i : subset) {
             sum += Double.parseDouble(prices.get(i)); // To calculate mean
         }
-        return sum / subset.size();        
+        return String.valueOf(sum / subset.size());
     }
     
     /**
      * Query 4: Calculate minimum price per square meter for a specific month and town
      */
-    public double getMinimumPricePerSquareMeter(String yearMonth, String town) throws IOException {
+    public String getMinimumPricePerSquareMeter(String yearMonth, String town) throws IOException {
         List<Integer> subset = getSubsetByMonthAndTownOptimized(yearMonth, town);
         if (subset.isEmpty()) {
-            return 0.0;
+            return "No result";
         }
 
         List<String> prices = readAndUncompressData("resale_price");
@@ -368,15 +416,15 @@ public class CompressedQueryEngine {
             minPricePerSqm = Math.min(minPricePerSqm, pricePerSqm);
         }
         
-        return minPricePerSqm;
+        return String.valueOf(minPricePerSqm);
     }
     
     /**
      * Run all queries for a specific month and town
      */
-    public Map<String, Map<String, Double>> runAllQueries(String yearMonth, String town) throws IOException {
-        Map<String, Map<String, Double>> resultsAndTimings = new HashMap<>();
-        Map<String, Double> results = new HashMap<>();
+    public Map<String, Object> runAllQueries(String yearMonth, String town) throws IOException {
+        Map<String, Object> resultsAndTimings = new HashMap<>();
+        Map<String, String> results = new HashMap<>();
         resultsAndTimings.put("results", results);
         Map<String, Double> timings = new HashMap<>();
         resultsAndTimings.put("timings", timings);
@@ -385,32 +433,175 @@ public class CompressedQueryEngine {
         
         // Get subset size
         TimerUtil.TimedResult<Integer> subset = TimerUtil.timeFunction(() -> getSubsetByMonthAndTownOptimized(yearMonth, town).size());
-        results.put("Subset Size", (double) subset.getResult());
+        results.put("Subset Size", String.valueOf(subset.getResult()));
         timings.put("Subset Size", subset.getDurationMs());
         totalTime += subset.getDurationMs();
         System.out.println("Time taken to filter on Compressed columns: " + String.valueOf(subset.getDurationMs()) + "ms");
         
         // Run all queries
         // Minimum Price
-        TimerUtil.TimedResult<Double> minPrice = TimerUtil.timeFunction(() -> getMinimumPrice(yearMonth, town));
+        TimerUtil.TimedResult<String> minPrice = TimerUtil.timeFunction(() -> getMinimumPrice(yearMonth, town));
         results.put("Minimum Price", minPrice.getResult());
         timings.put("Minimum Price", minPrice.getDurationMs());
         totalTime += minPrice.getDurationMs();
 
         // Standard Deviation of Price
-        TimerUtil.TimedResult<Double> stdDevPrice = TimerUtil.timeFunction(() -> getStandardDeviationPrice(yearMonth, town));
+        TimerUtil.TimedResult<String> stdDevPrice = TimerUtil.timeFunction(() -> getStandardDeviationPrice(yearMonth, town));
         results.put("Standard Deviation of Price", stdDevPrice.getResult());
         timings.put("Standard Deviation of Price", stdDevPrice.getDurationMs());
         totalTime += stdDevPrice.getDurationMs();
 
         // Average Price
-        TimerUtil.TimedResult<Double> avgPrice = TimerUtil.timeFunction(() -> getAveragePrice(yearMonth, town));
+        TimerUtil.TimedResult<String> avgPrice = TimerUtil.timeFunction(() -> getAveragePrice(yearMonth, town));
         results.put("Average Price", avgPrice.getResult());
         timings.put("Average Price", avgPrice.getDurationMs());
         totalTime += avgPrice.getDurationMs();
 
         // Minimum Price per Square Meter
-        TimerUtil.TimedResult<Double> minPsm = TimerUtil.timeFunction(() -> getMinimumPricePerSquareMeter(yearMonth, town));
+        TimerUtil.TimedResult<String> minPsm = TimerUtil.timeFunction(() -> getMinimumPricePerSquareMeter(yearMonth, town));
+        results.put("Minimum Price per Square Meter", minPsm.getResult());
+        timings.put("Minimum Price per Square Meter", minPsm.getDurationMs());
+        totalTime += minPsm.getDurationMs();
+
+        // Print total time taken for all queries
+        System.out.println("Total Time for all queries: " + totalTime + "ms");
+
+        return resultsAndTimings;
+    }
+
+    public Map<String, List<Integer>> getRelevantZonesIndices(String yearMonth, String town) throws IOException {
+        String nextMonthStr = PerformanceTest.getNextMonthStr(yearMonth);
+
+        // Check if we can use the optimized path with compressed dictionaries
+        Map<String, Integer> monthDict = loadDictionary("month");
+        Map<String, Integer> townDict = loadDictionary("town");
+        Map<String, Integer> floor_area_sqmDict = loadDictionary("floor_area_sqm");
+        Map<Integer, String> reversedFloorAreaSqmDict = reverseMap(floor_area_sqmDict);
+        
+        // Get the indices for our target values
+        Integer monthIndex1 = monthDict.get(yearMonth);
+        Integer monthIndex2 = monthDict.get(nextMonthStr);
+        Integer townIndex = townDict.get(town);
+
+        Map<String, List<Integer>> relevantZonesIndices = ZoneMetadata.getCompressedZonesIndicesFromRelevantZones(monthIndex1, monthIndex2, townIndex, columnStore.getDataDirectory(), reversedFloorAreaSqmDict);
+
+        return relevantZonesIndices;
+    }
+
+    public String getMinimumPriceZoneMap(String yearMonth, String town) throws IOException {
+        Map<String, List<Integer>> relevantZonesIndices = getRelevantZonesIndices(yearMonth, town);
+
+        if (relevantZonesIndices.get("indices").size() == 0) return "No result";
+
+        List<Double> resalePrices = readAndUncompressRelevantDoubleData("resale_price", relevantZonesIndices);
+
+        return String.valueOf(Collections.min(resalePrices));
+    }
+
+    public String getStandardDeviationPriceZoneMap(String yearMonth, String town) throws IOException {
+        Map<String, List<Integer>> relevantZonesIndices = getRelevantZonesIndices(yearMonth, town);
+
+        if (relevantZonesIndices.get("indices").size() == 0) return "No result";
+
+        List<Double> resalePrices = readAndUncompressRelevantDoubleData("resale_price", relevantZonesIndices);
+
+        double sum = 0.0;
+        double variance = 0.0;
+
+        for (double i : resalePrices) {
+            sum += i; // To calculate mean
+        }
+        double mean = sum / resalePrices.size();
+
+        for (double i : resalePrices) {
+            variance += Math.pow(i - mean, 2);
+        }
+        variance /= (resalePrices.size()-1);
+        
+        // Return standard deviation (square root of variance)
+        return String.valueOf(Math.sqrt(variance));
+    }
+
+        /**
+     * Query 3: Calculate average resale price for a specific month and town
+     */
+    public String getAveragePriceZoneMap(String yearMonth, String town) throws IOException {
+        Map<String, List<Integer>> relevantZonesIndices = getRelevantZonesIndices(yearMonth, town);
+
+        if (relevantZonesIndices.get("indices").size() == 0) return "No result";
+
+        List<Double> resalePrices = readAndUncompressRelevantDoubleData("resale_price", relevantZonesIndices);
+
+        double sum = 0.0;
+        for (double i : resalePrices) {
+            sum += i; // To calculate mean
+        }
+        return String.valueOf(sum / resalePrices.size());
+    }
+    
+    /**
+     * Query 4: Calculate minimum price per square meter for a specific month and town
+     */
+    public String getMinimumPricePerSquareMeterZoneMap(String yearMonth, String town) throws IOException {
+        Map<String, List<Integer>> relevantZonesIndices = getRelevantZonesIndices(yearMonth, town);
+
+        if (relevantZonesIndices.get("indices").size() == 0) return "No result";
+
+        List<Double> resalePrices = readAndUncompressRelevantDoubleData("resale_price", relevantZonesIndices);
+        List<Double> areas = readAndUncompressRelevantDoubleData("floor_area_sqm", relevantZonesIndices);
+        
+        double minPricePerSqm = Double.MAX_VALUE;
+        for (int index = 0; index < relevantZonesIndices.size(); index++) {
+            double price = resalePrices.get(index);
+            double area = areas.get(index);
+            double pricePerSqm = price / area;
+            
+            minPricePerSqm = Math.min(minPricePerSqm, pricePerSqm);
+        }
+        
+        return String.valueOf(minPricePerSqm);
+    }
+
+        /**
+     * Run all queries for a specific month and town
+     */
+    public Map<String, Object> runAllQueriesZoneMap(String yearMonth, String town) throws IOException {
+        Map<String, Object> resultsAndTimings = new HashMap<>();
+        Map<String, String> results = new HashMap<>();
+        resultsAndTimings.put("results", results);
+        Map<String, Double> timings = new HashMap<>();
+        resultsAndTimings.put("timings", timings);
+
+        double totalTime = 0.0;
+        
+        // Get subset size
+        TimerUtil.TimedResult<Integer> subset = TimerUtil.timeFunction(() -> getRelevantZonesIndices(yearMonth, town).size());
+        results.put("Subset Size", String.valueOf(subset.getResult()));
+        timings.put("Subset Size", subset.getDurationMs());
+        totalTime += subset.getDurationMs();
+        System.out.println("Time taken to filter on Compressed columns: " + String.valueOf(subset.getDurationMs()) + "ms");
+        
+        // Run all queries
+        // Minimum Price
+        TimerUtil.TimedResult<String> minPrice = TimerUtil.timeFunction(() -> getMinimumPriceZoneMap(yearMonth, town));
+        results.put("Minimum Price", minPrice.getResult());
+        timings.put("Minimum Price", minPrice.getDurationMs());
+        totalTime += minPrice.getDurationMs();
+
+        // Standard Deviation of Price
+        TimerUtil.TimedResult<String> stdDevPrice = TimerUtil.timeFunction(() -> getStandardDeviationPriceZoneMap(yearMonth, town));
+        results.put("Standard Deviation of Price", stdDevPrice.getResult());
+        timings.put("Standard Deviation of Price", stdDevPrice.getDurationMs());
+        totalTime += stdDevPrice.getDurationMs();
+
+        // Average Price
+        TimerUtil.TimedResult<String> avgPrice = TimerUtil.timeFunction(() -> getAveragePriceZoneMap(yearMonth, town));
+        results.put("Average Price", avgPrice.getResult());
+        timings.put("Average Price", avgPrice.getDurationMs());
+        totalTime += avgPrice.getDurationMs();
+
+        // Minimum Price per Square Meter
+        TimerUtil.TimedResult<String> minPsm = TimerUtil.timeFunction(() -> getMinimumPricePerSquareMeterZoneMap(yearMonth, town));
         results.put("Minimum Price per Square Meter", minPsm.getResult());
         timings.put("Minimum Price per Square Meter", minPsm.getDurationMs());
         totalTime += minPsm.getDurationMs();
