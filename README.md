@@ -6,7 +6,7 @@ This project implements and compares different data storage and query optimizati
 - To compare the different column storage solutions, run 2 steps:
   - javac *.java
   - java CompressionTestMain.java
-- \<MatricNum>.csv output file, .col, .dict, zonemaps will be created upon running the above 2 commands
+- ScanResult_\<MatricNum>.csv output file, .col, .dict, zonemaps will be created upon running the above 2 commands
 - (OPTIONAL) To verify that row storage indeed performs worse than the column storage solutions, run: java RowStoreTest.java
 
 ## Query: Filter by Month, Town, and Area
